@@ -2,107 +2,436 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Ball Splitter Minimal</title>
+    <title>Neon Ball Splitter Arcade</title>
     <style>
-        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; color: #fff; font-family: sans-serif; }
-        canvas { background: #111; border: 2px solid #0ff; display: block; }
-        #ui { position: absolute; text-align: center; }
-        button { background: #0ff; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; }
+        body {
+            margin: 0;
+            background: #050508;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 480px;
+            height: 640px;
+            background: #0b0b12;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 30px rgba(0,255,255,0.4);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 480px;
+            height: 640px;
+            background: rgba(5, 5, 8, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        h1 {
+            color: #00ffff;
+            margin-bottom: 5px;
+            font-size: 28px;
+            text-shadow: 0 0 15px rgba(0,255,255,0.7);
+            letter-spacing: 2px;
+        }
+        p {
+            color: #aaa;
+            font-size: 13px;
+            text-align: center;
+            padding: 0 30px;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        .btn {
+            background: linear-gradient(135deg, #00ffff, #0088ff);
+            color: #000;
+            border: none;
+            padding: 14px 35px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 6px;
+            box-shadow: 0 0 15px rgba(0,255,255,0.5);
+            transition: 0.2s;
+        }
+        .btn:hover {
+            background: #fff;
+            box-shadow: 0 0 25px #fff;
+            transform: scale(1.05);
+        }
+        #hud {
+            position: absolute;
+            top: 12px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            font-weight: bold;
+            z-index: 5;
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            color: #00ffff;
+        }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <h1>BALL SPLITTER</h1>
-    <p>Arrow Keys/A-D to Move | Space to Shoot</p>
-    <button onclick="startGame()">PLAY</button>
-</div>
+<div id="game-container">
+    <div id="hud">
+        <div id="score">SCORE: 0</div>
+        <div id="lives">LIVES: ❤️❤️❤️</div>
+    </div>
 
-<canvas id="canvas" width="480" height="600"></canvas>
+    <div id="ui">
+        <h1 id="title">NEON SPLITTER</h1>
+        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Destroy splitting balls and catch upgrades!</p>
+        <button class="btn" id="start-btn" onclick="startGame()">PLAY GAME</button>
+    </div>
+
+    <canvas id="canvas" width="480" height="640"></canvas>
+</div>
 
 <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
-    let playing = false;
-    let ship = { x: 220, y: 550, w: 40, h: 20, speed: 6 };
+    const WIDTH = 480;
+    const HEIGHT = 640;
+
+    let gameState = "MENU";
+    let score = 0;
+    let lives = 3;
+    let animId = null;
+
+    let ship = { x: WIDTH / 2 - 20, y: HEIGHT - 50, w: 40, h: 22, speed: 7 };
     let bullets = [];
-    let ball = { x: 240, y: 100, vx: 2, vy: 0, r: 30 };
+    let balls = [];
+    let powerUps = [];
+    let particles = [];
+    let stars = [];
+    let laserLvl = 1;
     let keys = {};
+
+    // Generate background starfield
+    for (let i = 0; i < 50; i++) {
+        stars.push({
+            x: Math.random() * WIDTH,
+            y: Math.random() * HEIGHT,
+            size: Math.random() * 2,
+            speed: Math.random() * 0.5 + 0.2
+        });
+    }
 
     window.addEventListener("keydown", e => {
         keys[e.code] = true;
-        if (e.code === "Space" && playing) {
+        if (e.code === "Space" && gameState === "PLAYING") {
             e.preventDefault();
-            bullets.push({ x: ship.x + 18, y: ship.y, w: 4, h: 10 });
+            shoot();
         }
     });
     window.addEventListener("keyup", e => { keys[e.code] = false; });
 
     function startGame() {
-        playing = true;
+        if (animId) cancelAnimationFrame(animId);
+
+        gameState = "PLAYING";
+        score = 0;
+        lives = 3;
+        laserLvl = 1;
+        bullets = [];
+        powerUps = [];
+        particles = [];
+        ship.x = WIDTH / 2 - ship.w / 2;
+
+        balls = [{
+            x: WIDTH / 2,
+            y: 120,
+            vx: 3,
+            vy: 0,
+            size: 3
+        }];
+
         document.getElementById("ui").style.display = "none";
         loop();
     }
 
-    function loop() {
-        if (!playing) return;
+    function gameOver() {
+        gameState = "GAMEOVER";
+        if (animId) cancelAnimationFrame(animId);
+        document.getElementById("title").innerText = "GAME OVER";
+        document.getElementById("start-btn").innerText = "PLAY AGAIN";
+        document.getElementById("ui").style.display = "flex";
+    }
 
-        // 1. Controls
+    function shoot() {
+        if (laserLvl === 1) {
+            bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 14, spd: 13, vx: 0 });
+        } else {
+            bullets.push({ x: ship.x + 4, y: ship.y, w: 4, h: 14, spd: 13, vx: -1.8 });
+            bullets.push({ x: ship.x + ship.w - 8, y: ship.y, w: 4, h: 14, spd: 13, vx: 1.8 });
+        }
+    }
+
+    function spawnExplosion(x, y, color) {
+        for (let i = 0; i < 15; i++) {
+            let angle = Math.random() * Math.PI * 2;
+            let speed = Math.random() * 4 + 1;
+            particles.push({
+                x: x, y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                alpha: 1,
+                color: color,
+                size: Math.random() * 3 + 1
+            });
+        }
+    }
+
+    const gravity = 0.45;
+    const ballConfigs = {
+        3: { radius: 38, targetHeight: 430, color: "#ff2255", glow: "#ff7799", splitSize: 2, points: 100 },
+        2: { radius: 24, targetHeight: 310, color: "#ff8800", glow: "#ffbb55", splitSize: 1, points: 50 },
+        1: { radius: 15, targetHeight: 190, color: "#ffee00", glow: "#ffff88", splitSize: 0, points: 25 }
+    };
+
+    function update() {
+        if (gameState !== "PLAYING") return;
+
+        // Move stars
+        for (let s of stars) {
+            s.y += s.speed;
+            if (s.y > HEIGHT) s.y = 0;
+        }
+
+        // Ship movement
         if ((keys["ArrowLeft"] || keys["KeyA"]) && ship.x > 0) ship.x -= ship.speed;
-        if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < 440) ship.x += ship.speed;
+        if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < WIDTH - ship.w) ship.x += ship.speed;
 
-        // 2. Bullets
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            bullets[i].y -= 10;
-            if (bullets[i].y < 0) bullets.splice(i, 1);
-        }
-
-        // 3. Ball Physics (Foolproof Bounce)
-        ball.vy += 0.35; // Gravity
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-
-        // Wall bounce (Left/Right)
-        if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx *= -1; }
-        if (ball.x + ball.r > 480) { ball.x = 480 - ball.r; ball.vx *= -1; }
-
-        // Floor bounce (Bottom) - Explicitly locks position to floor and forces upward velocity
-        if (ball.y + ball.r > 600) {
-            ball.y = 600 - ball.r;
-            ball.vy = -11; 
-        }
-
-        // Bullet collision check
+        // Update Bullets
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
-            let dist = Math.hypot(b.x - ball.x, b.y - ball.y);
-            if (dist < ball.r) {
-                bullets.splice(i, 1);
-                // Reset or split ball
-                ball.y = 100;
-                ball.vy = -5;
+            b.y -= b.spd;
+            if (b.vx) b.x += b.vx;
+            if (b.y < 0) bullets.splice(i, 1);
+        }
+
+        // Update Balls & Bounce Physics
+        for (let i = balls.length - 1; i >= 0; i--) {
+            let ball = balls[i];
+            let cfg = ballConfigs[ball.size];
+
+            ball.vy += gravity;
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            // Walls
+            if (ball.x - cfg.radius <= 0) {
+                ball.x = cfg.radius;
+                ball.vx = Math.abs(ball.vx);
+            } else if (ball.x + cfg.radius >= WIDTH) {
+                ball.x = WIDTH - cfg.radius;
+                ball.vx = -Math.abs(ball.vx);
+            }
+
+            // Floor bounce
+            if (ball.y + cfg.radius >= HEIGHT) {
+                ball.y = HEIGHT - cfg.radius;
+                ball.vy = -Math.sqrt(2 * gravity * cfg.targetHeight);
+            }
+
+            // Ship collision check
+            let dx = (ship.x + ship.w / 2) - ball.x;
+            let dy = (ship.y + ship.h / 2) - ball.y;
+            if (Math.hypot(dx, dy) < cfg.radius + ship.w / 3) {
+                lives--;
+                spawnExplosion(ship.x + ship.w/2, ship.y + ship.h/2, "#00ffff");
+                if (lives <= 0) {
+                    gameOver();
+                    return;
+                } else {
+                    ball.y = 100;
+                    ball.vy = 0;
+                    ship.x = WIDTH / 2 - ship.w / 2;
+                    break;
+                }
+            }
+
+            // Bullet collision check
+            for (let j = bullets.length - 1; j >= 0; j--) {
+                let b = bullets[j];
+                if (Math.hypot(b.x - ball.x, b.y - ball.y) < cfg.radius) {
+                    bullets.splice(j, 1);
+                    score += cfg.points;
+                    spawnExplosion(ball.x, ball.y, cfg.color);
+
+                    if (Math.random() < 0.25) {
+                        powerUps.push({ x: ball.x, y: ball.y, r: 11, spd: 2.2 });
+                    }
+
+                    if (cfg.splitSize > 0) {
+                        let nextCfg = ballConfigs[cfg.splitSize];
+                        let splitBounce = -Math.sqrt(2 * gravity * (cfg.targetHeight * 0.75));
+                        
+                        balls.push({ x: ball.x - 6, y: ball.y, vx: -3.2, vy: splitBounce, size: cfg.splitSize });
+                        balls.push({ x: ball.x + 6, y: ball.y, vx: 3.2, vy: splitBounce, size: cfg.splitSize });
+                    }
+                    balls.splice(i, 1);
+                    break;
+                }
             }
         }
 
-        // 4. Render
-        ctx.clearRect(0, 0, 480, 600);
+        // Update Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= 0.03;
+            if (p.alpha <= 0) particles.splice(i, 1);
+        }
 
-        // Ship
-        ctx.fillStyle = "#0ff";
-        ctx.fillRect(ship.x, ship.y, ship.w, ship.h);
+        // Update Power-ups
+        for (let i = powerUps.length - 1; i >= 0; i--) {
+            let p = powerUps[i];
+            p.y += p.spd;
+            if (p.x > ship.x && p.x < ship.x + ship.w && p.y > ship.y && p.y < ship.y + ship.h) {
+                if (laserLvl < 2) laserLvl++;
+                powerUps.splice(i, 1);
+                score += 150;
+                continue;
+            }
+            if (p.y > HEIGHT) powerUps.splice(i, 1);
+        }
 
-        // Bullets
-        ctx.fillStyle = "#0f0";
-        for (let b of bullets) ctx.fillRect(b.x, b.y, b.w, b.h);
+        if (balls.length === 0) {
+            balls.push({ x: WIDTH / 2, y: 120, vx: 3, vy: 0, size: 3 });
+        }
 
-        // Ball
-        ctx.fillStyle = "#f33";
+        document.getElementById("score").innerText = `SCORE: ${score}`;
+        document.getElementById("lives").innerText = `LIVES: ${"❤️".repeat(lives)}`;
+    }
+
+    function draw() {
+        ctx.fillStyle = "#0b0b12";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // Draw Starfield background
+        ctx.fillStyle = "#ffffff";
+        for (let s of stars) {
+            ctx.globalAlpha = Math.random() * 0.5 + 0.3;
+            ctx.fillRect(s.x, s.y, s.size, s.size);
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Draw Particles
+        for (let p of particles) {
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Draw Neon Ship
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#00ffff";
+        ctx.fillStyle = "#00ffff";
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.moveTo(ship.x + ship.w / 2, ship.y);
+        ctx.lineTo(ship.x, ship.y + ship.h);
+        ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
+        ctx.closePath();
         ctx.fill();
+        // Ship engine flame
+        ctx.fillStyle = "#ff5500";
+        ctx.fillRect(ship.x + ship.w / 2 - 4, ship.y + ship.h, 8, Math.random() * 8 + 4);
+        ctx.restore();
 
-        requestAnimationFrame(loop);
+        // Draw Glowing Lasers
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#00ffcc";
+        ctx.fillStyle = "#00ffcc";
+        for (let b of bullets) {
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+        }
+        ctx.restore();
+
+        // Draw Balls with 3D Glossy Gradients & Level Numbers
+        for (let ball of balls) {
+            let cfg = ballConfigs[ball.size];
+            
+            ctx.save();
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = cfg.glow;
+
+            // Radial gradient for glossy 3D ball look
+            let grad = ctx.createRadialGradient(ball.x - cfg.radius/3, ball.y - cfg.radius/3, cfg.radius/8, ball.x, ball.y, cfg.radius);
+            grad.addColorStop(0, cfg.glow);
+            grad.addColorStop(0.7, cfg.color);
+            grad.addColorStop(1, "#110011");
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, cfg.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Display Ball Level (Tier number inside the ball)
+            ctx.fillStyle = "#ffffff";
+            ctx.font = `bold ${Math.floor(cfg.radius * 0.9)}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = "#000";
+            ctx.fillText(ball.size, ball.x, ball.y);
+
+            ctx.restore();
+        }
+
+        // Draw Power-ups
+        for (let p of powerUps) {
+            ctx.save();
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = "#00ff00";
+            ctx.fillStyle = "#00ff00";
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 10px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("UP", p.x, p.y);
+            ctx.restore();
+        }
+    }
+
+    function loop() {
+        if (gameState !== "PLAYING") return;
+        update();
+        draw();
+        animId = requestAnimationFrame(loop);
     }
 </script>
 
