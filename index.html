@@ -2,22 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Strict CSP allowance for Office Add-in webviews -->
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: https:; img-src * data: https:; style-src * 'unsafe-inline';">
     <title>Neon Ball Splitter - Office Add-in</title>
     <!-- Microsoft Office JavaScript API -->
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/scripts/office.js"></script>
     <style>
-        body {
+        * { box-sizing: border-box; }
+        body, html {
             margin: 0;
             padding: 0;
+            width: 100%;
+            height: 100%;
             background: #050508;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: 100vw;
-            height: 100vh;
             color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         #game-container {
             position: relative;
@@ -28,16 +33,15 @@
             background: #0b0b12;
             border: 2px solid #00ffff;
             box-shadow: 0 0 20px rgba(0,255,255,0.3);
-            overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
         }
         canvas {
             display: block;
-            background: #0b0b12;
             width: 100%;
             height: 100%;
+            background: #0b0b12;
         }
         #ui {
             position: absolute;
@@ -45,27 +49,25 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(5, 5, 8, 0.95);
+            background: rgba(5, 5, 8, 0.96);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 10;
-            box-sizing: border-box;
             padding: 20px;
+            text-align: center;
         }
         h1 {
             color: #00ffff;
-            margin-bottom: 5px;
+            margin: 0 0 10px 0;
             font-size: 24px;
             text-shadow: 0 0 12px rgba(0,255,255,0.7);
             letter-spacing: 2px;
-            text-align: center;
         }
         p {
             color: #aaa;
             font-size: 12px;
-            text-align: center;
             margin-bottom: 20px;
             line-height: 1.4;
         }
@@ -140,21 +142,15 @@
     let laserLvl = 1;
     let keys = {};
 
-    // Office Add-in initialization lifecycle hook
-    Office.onReady((info) => {
-        console.log("Office Add-in environment ready.");
-        initApp();
-    });
-
-    // Fallback standard browser init if tested outside Office
-    window.addEventListener("DOMContentLoaded", () => {
-        if (!canvas) {
-            initApp();
-        }
-    });
+    // Robust Office initialization with immediate fallback for webviews
+    let appInitialized = false;
 
     function initApp() {
+        if (appInitialized) return;
+        appInitialized = true;
+
         canvas = document.getElementById("canvas");
+        if (!canvas) return;
         ctx = canvas.getContext("2d");
 
         // Generate background starfield
@@ -169,14 +165,29 @@
             }
         }
 
-        // Attach reliable click event listener to the play button
+        // Bind play button safely
         const startBtn = document.getElementById("start-btn");
-        startBtn.replaceWith(startBtn.cloneNode(true)); // Clear old listeners
-        document.getElementById("start-btn").addEventListener("click", (e) => {
-            e.preventDefault();
-            startGame();
+        if (startBtn) {
+            startBtn.onclick = null; // Clear inline conflicts
+            startBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                startGame();
+            });
+        }
+    }
+
+    // Office.js ready handler
+    if (typeof Office !== 'undefined' && Office.onReady) {
+        Office.onReady((info) => {
+            console.log("Office host detected:", info.host);
+            initApp();
         });
     }
+
+    // Standard DOM fallback
+    window.addEventListener("DOMContentLoaded", () => {
+        initApp();
+    });
 
     window.addEventListener("keydown", e => {
         keys[e.code] = true;
@@ -237,13 +248,14 @@
         document.getElementById("start-btn").innerText = "PLAY AGAIN";
         document.getElementById("ui").style.display = "flex";
         
-        // Re-bind click listener for the restart state
         const startBtn = document.getElementById("start-btn");
-        startBtn.replaceWith(startBtn.cloneNode(true));
-        document.getElementById("start-btn").addEventListener("click", (e) => {
-            e.preventDefault();
-            startGame();
-        });
+        if (startBtn) {
+            startBtn.onclick = null;
+            startBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                startGame();
+            });
+        }
     }
 
     function shoot() {
