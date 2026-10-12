@@ -99,7 +99,7 @@
 
     <div id="ui">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Clear all balls to auto-advance levels!</p>
+        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Press <b>Enter</b> or click Play to start!</p>
         <button class="btn" id="start-btn" onclick="startGame()">PLAY GAME</button>
     </div>
 
@@ -140,6 +140,13 @@
 
     window.addEventListener("keydown", e => {
         keys[e.code] = true;
+        
+        // Start or restart game when pressing Enter from MENU or GAMEOVER state
+        if (e.code === "Enter" && gameState !== "PLAYING") {
+            e.preventDefault();
+            startGame();
+        }
+
         if (e.code === "Space" && gameState === "PLAYING") {
             e.preventDefault();
             shoot();
@@ -168,7 +175,6 @@
 
     function loadLevel(lvl) {
         balls = [];
-        // Scale number of starting balls based on level
         let ballCount = Math.min(lvl, 3);
         for (let i = 0; i < ballCount; i++) {
             let startX = WIDTH * (0.25 + (0.5 * (i / Math.max(1, ballCount - 1))));
@@ -226,17 +232,14 @@
     function update() {
         if (gameState !== "PLAYING") return;
 
-        // Move stars
         for (let s of stars) {
             s.y += s.speed;
             if (s.y > HEIGHT) s.y = 0;
         }
 
-        // Ship movement
         if ((keys["ArrowLeft"] || keys["KeyA"]) && ship.x > 0) ship.x -= ship.speed;
         if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < WIDTH - ship.w) ship.x += ship.speed;
 
-        // Update Bullets
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
             b.y -= b.spd;
@@ -244,7 +247,6 @@
             if (b.y < 0) bullets.splice(i, 1);
         }
 
-        // Update Balls & Bounce Physics
         for (let i = balls.length - 1; i >= 0; i--) {
             let ball = balls[i];
             let cfg = ballConfigs[ball.size];
@@ -253,7 +255,6 @@
             ball.x += ball.vx;
             ball.y += ball.vy;
 
-            // Walls
             if (ball.x - cfg.radius <= 0) {
                 ball.x = cfg.radius;
                 ball.vx = Math.abs(ball.vx);
@@ -262,13 +263,11 @@
                 ball.vx = -Math.abs(ball.vx);
             }
 
-            // Floor bounce
             if (ball.y + cfg.radius >= HEIGHT) {
                 ball.y = HEIGHT - cfg.radius;
                 ball.vy = -Math.sqrt(2 * gravity * cfg.targetHeight);
             }
 
-            // Ship collision check
             let dx = (ship.x + ship.w / 2) - ball.x;
             let dy = (ship.y + ship.h / 2) - ball.y;
             if (Math.hypot(dx, dy) < cfg.radius + ship.w / 3) {
@@ -285,7 +284,6 @@
                 }
             }
 
-            // Bullet collision check
             for (let j = bullets.length - 1; j >= 0; j--) {
                 let b = bullets[j];
                 if (Math.hypot(b.x - ball.x, b.y - ball.y) < cfg.radius) {
@@ -310,7 +308,6 @@
             }
         }
 
-        // Update Particles
         for (let i = particles.length - 1; i >= 0; i--) {
             let p = particles[i];
             p.x += p.vx;
@@ -319,11 +316,129 @@
             if (p.alpha <= 0) particles.splice(i, 1);
         }
 
-        // Update Power-ups
         for (let i = powerUps.length - 1; i >= 0; i--) {
             let p = powerUps[i];
             p.y += p.spd;
             if (p.x > ship.x && p.x < ship.x + ship.w && p.y > ship.y && p.y < ship.y + ship.h) {
                 if (laserLvl < 2) laserLvl++;
                 powerUps.splice(i, 1);
-                score += 150
+                score += 150;
+                continue;
+            }
+            if (p.y > HEIGHT) powerUps.splice(i, 1);
+        }
+
+        if (balls.length === 0) {
+            currentLevel++;
+            score += 500 * currentLevel;
+            loadLevel(currentLevel);
+        }
+
+        document.getElementById("score").innerText = `SCORE: ${score}`;
+        document.getElementById("level-display").innerText = `LVL: ${currentLevel}`;
+        document.getElementById("lives").innerText = `LIVES: ${"❤️".repeat(lives)}`;
+    }
+
+    function draw() {
+        ctx.fillStyle = "#0b0b12";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        ctx.fillStyle = "#ffffff";
+        for (let s of stars) {
+            ctx.globalAlpha = Math.random() * 0.5 + 0.3;
+            ctx.fillRect(s.x, s.y, s.size, s.size);
+        }
+        ctx.globalAlpha = 1.0;
+
+        for (let p of particles) {
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#00ffff";
+        ctx.fillStyle = "#00ffff";
+        ctx.beginPath();
+        ctx.moveTo(ship.x + ship.w / 2, ship.y);
+        ctx.lineTo(ship.x, ship.y + ship.h);
+        ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#ff5500";
+        ctx.fillRect(ship.x + ship.w / 2 - 4, ship.y + ship.h, 8, Math.random() * 8 + 4);
+        ctx.restore();
+
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#00ffcc";
+        ctx.fillStyle = "#00ffcc";
+        for (let b of bullets) {
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+        }
+        ctx.restore();
+
+        for (let ball of balls) {
+            let cfg = ballConfigs[ball.size];
+            
+            ctx.save();
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = cfg.glow;
+
+            let grad = ctx.createRadialGradient(ball.x - cfg.radius/3, ball.y - cfg.radius/3, cfg.radius/8, ball.x, ball.y, cfg.radius);
+            grad.addColorStop(0, cfg.glow);
+            grad.addColorStop(0.7, cfg.color);
+            grad.addColorStop(1, "#110011");
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, cfg.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = "#ffffff";
+            ctx.font = `bold ${Math.floor(cfg.radius * 0.9)}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = "#000";
+            ctx.fillText(ball.size, ball.x, ball.y);
+
+            ctx.restore();
+        }
+
+        for (let p of powerUps) {
+            ctx.save();
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = "#00ff00";
+            ctx.fillStyle = "#00ff00";
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 10px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("UP", p.x, p.y);
+            ctx.restore();
+        }
+    }
+
+    function loop() {
+        if (gameState !== "PLAYING") return;
+        update();
+        draw();
+        animId = requestAnimationFrame(loop);
+    }
+</script>
+
+</body>
+</html>
