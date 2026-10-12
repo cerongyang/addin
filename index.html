@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Strict CSP allowance for Office Add-in webviews -->
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: https:; img-src * data: https:; style-src * 'unsafe-inline';">
     <title>Neon Ball Splitter - Office Add-in</title>
-    <!-- Microsoft Office JavaScript API -->
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/scripts/office.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -34,14 +32,44 @@
             border: 2px solid #00ffff;
             box-shadow: 0 0 20px rgba(0,255,255,0.3);
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
         }
         canvas {
             display: block;
             width: 100%;
-            height: 100%;
+            height: 570px;
             background: #0b0b12;
+        }
+        /* On-screen control bar for Office environments */
+        #controls-bar {
+            width: 100%;
+            height: 70px;
+            background: #11111a;
+            border-top: 2px solid #00ffff;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 10px;
+        }
+        .ctrl-btn {
+            background: rgba(0, 255, 255, 0.2);
+            color: #00ffff;
+            border: 2px solid #00ffff;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 6px;
+            user-select: none;
+            flex: 1;
+            margin: 0 5px;
+            text-align: center;
+        }
+        .ctrl-btn:active {
+            background: #00ffff;
+            color: #000;
         }
         #ui {
             position: absolute;
@@ -57,6 +85,7 @@
             z-index: 10;
             padding: 20px;
             text-align: center;
+            cursor: pointer;
         }
         h1 {
             color: #00ffff;
@@ -82,6 +111,7 @@
             border-radius: 6px;
             box-shadow: 0 0 12px rgba(0,255,255,0.5);
             transition: 0.2s;
+            pointer-events: auto;
         }
         .btn:hover {
             background: #fff;
@@ -113,19 +143,26 @@
         <div id="lives">LIVES: ❤️❤️❤️</div>
     </div>
 
-    <div id="ui">
+    <div id="ui" onclick="startGame()">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire lasers.<br>Click Play or press <b>Enter</b> to start!</p>
+        <p>Use <b>Arrow Keys</b>, <b>A/D</b>, or screen buttons to move.<br>Press <b>Spacebar</b> to fire lasers.<br>Click anywhere or press <b>Enter</b> to start!</p>
         <button class="btn" id="start-btn">PLAY GAME</button>
     </div>
 
-    <canvas id="canvas" width="480" height="640"></canvas>
+    <canvas id="canvas" width="480" height="570"></canvas>
+
+    <!-- On-screen controls to bypass Office keyboard limitations -->
+    <div id="controls-bar">
+        <div class="ctrl-btn" id="btn-left">◀ LEFT</div>
+        <div class="ctrl-btn" id="btn-shoot">FIRE 🚀</div>
+        <div class="ctrl-btn" id="btn-right">RIGHT ▶</div>
+    </div>
 </div>
 
 <script>
     let canvas, ctx;
     const WIDTH = 480;
-    const HEIGHT = 640;
+    const HEIGHT = 570;
 
     let gameState = "MENU";
     let score = 0;
@@ -133,7 +170,7 @@
     let currentLevel = 1;
     let animId = null;
 
-    let ship = { x: WIDTH / 2 - 20, y: HEIGHT - 50, w: 40, h: 22, speed: 7 };
+    let ship = { x: WIDTH / 2 - 20, y: HEIGHT - 45, w: 40, h: 22, speed: 7 };
     let bullets = [];
     let balls = [];
     let powerUps = [];
@@ -142,18 +179,11 @@
     let laserLvl = 1;
     let keys = {};
 
-    // Robust Office initialization with immediate fallback for webviews
-    let appInitialized = false;
-
     function initApp() {
-        if (appInitialized) return;
-        appInitialized = true;
-
         canvas = document.getElementById("canvas");
         if (!canvas) return;
         ctx = canvas.getContext("2d");
 
-        // Generate background starfield
         if (stars.length === 0) {
             for (let i = 0; i < 50; i++) {
                 stars.push({
@@ -165,44 +195,45 @@
             }
         }
 
-        // Bind play button safely
-        const startBtn = document.getElementById("start-btn");
-        if (startBtn) {
-            startBtn.onclick = null; // Clear inline conflicts
-            startBtn.addEventListener("click", (e) => {
-                e.preventDefault();
-                startGame();
-            });
-        }
+        // Setup touch/mouse listeners for on-screen buttons
+        const setupBtn = (id, actionDown, actionUp) => {
+            let el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener("mousedown", (e) => { e.preventDefault(); actionDown(); });
+            el.addEventListener("mouseup", (e) => { e.preventDefault(); actionUp(); });
+            el.addEventListener("touchstart", (e) => { e.preventDefault(); actionDown(); });
+            el.addEventListener("touchend", (e) => { e.preventDefault(); actionUp(); });
+        };
+
+        setupBtn("btn-left", () => { keys["ArrowLeft"] = true; }, () => { keys["ArrowLeft"] = false; });
+        setupBtn("btn-right", () => { keys["ArrowRight"] = true; }, () => { keys["ArrowRight"] = false; });
+        setupBtn("btn-shoot", () => { if (gameState === "PLAYING") shoot(); }, () => {});
     }
 
-    // Office.js ready handler
     if (typeof Office !== 'undefined' && Office.onReady) {
-        Office.onReady((info) => {
-            console.log("Office host detected:", info.host);
-            initApp();
-        });
+        Office.onReady(() => { initApp(); });
     }
-
-    // Standard DOM fallback
-    window.addEventListener("DOMContentLoaded", () => {
-        initApp();
-    });
+    window.addEventListener("DOMContentLoaded", () => { initApp(); });
 
     window.addEventListener("keydown", e => {
+        // Prevent Office from stealing arrow keys when playing
+        if (["ArrowLeft", "ArrowRight", "Space", "KeyA", "KeyD"].includes(e.code)) {
+            e.preventDefault();
+        }
         keys[e.code] = true;
-        
+
         if (e.code === "Enter" && gameState !== "PLAYING") {
             e.preventDefault();
             startGame();
         }
-
         if (e.code === "Space" && gameState === "PLAYING") {
-            e.preventDefault();
             shoot();
         }
     });
-    window.addEventListener("keyup", e => { keys[e.code] = false; });
+
+    window.addEventListener("keyup", e => {
+        keys[e.code] = false;
+    });
 
     function startGame() {
         if (!canvas) initApp();
@@ -221,6 +252,7 @@
         loadLevel(currentLevel);
 
         document.getElementById("ui").style.display = "none";
+        window.focus(); // Force focus back to game window
         loop();
     }
 
@@ -233,7 +265,7 @@
             
             balls.push({
                 x: startX,
-                y: 120 + (i * 20),
+                y: 100 + (i * 20),
                 vx: (i % 2 === 0 ? 2.8 : -2.8),
                 vy: 0,
                 size: 3
@@ -247,15 +279,6 @@
         document.getElementById("title").innerText = "GAME OVER";
         document.getElementById("start-btn").innerText = "PLAY AGAIN";
         document.getElementById("ui").style.display = "flex";
-        
-        const startBtn = document.getElementById("start-btn");
-        if (startBtn) {
-            startBtn.onclick = null;
-            startBtn.addEventListener("click", (e) => {
-                e.preventDefault();
-                startGame();
-            });
-        }
     }
 
     function shoot() {
@@ -284,9 +307,9 @@
 
     const gravity = 0.45;
     const ballConfigs = {
-        3: { radius: 38, targetHeight: 430, color: "#ff2255", glow: "#ff7799", splitSize: 2, points: 100 },
-        2: { radius: 24, targetHeight: 310, color: "#ff8800", glow: "#ffbb55", splitSize: 1, points: 50 },
-        1: { radius: 15, targetHeight: 190, color: "#ffee00", glow: "#ffff88", splitSize: 0, points: 25 }
+        3: { radius: 38, targetHeight: 380, color: "#ff2255", glow: "#ff7799", splitSize: 2, points: 100 },
+        2: { radius: 24, targetHeight: 270, color: "#ff8800", glow: "#ffbb55", splitSize: 1, points: 50 },
+        1: { radius: 15, targetHeight: 170, color: "#ffee00", glow: "#ffff88", splitSize: 0, points: 25 }
     };
 
     function update() {
