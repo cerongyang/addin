@@ -117,11 +117,12 @@
     let powerUps = [];
     let laserLevel = 1;
 
-    // Ball physics configurations (bounceHeight controls upward velocity on floor impact)
+    // Fixed physics parameters: Gravity constant and specific bounce energy peaks (target height per tier)
+    const gravity = 0.38;
     const ballConfigs = {
-        3: { radius: 40, bounceVelocity: -12.5, gravity: 0.4, color: "#ff3366", splitSize: 2, scoreVal: 100 },
-        2: { radius: 25, bounceVelocity: -10.5, gravity: 0.4, color: "#ff9933", splitSize: 1, scoreVal: 50 },
-        1: { radius: 15, bounceVelocity: -8.5, gravity:  0.4, color: "#ffff33", splitSize: 0, scoreVal: 25 }
+        3: { radius: 40, bouncePeak: 440, color: "#ff3366", splitSize: 2, scoreVal: 100 }, // reaches high up
+        2: { radius: 25, bouncePeak: 310, color: "#ff9933", splitSize: 1, scoreVal: 50 },  // medium height
+        1: { radius: 15, bouncePeak: 200, color: "#ffff33", splitSize: 0, scoreVal: 25 }   // lower bounce
     };
 
     function startGame() {
@@ -133,9 +134,10 @@
         powerUps = [];
         ship.x = canvas.width / 2 - ship.width / 2;
         
+        // Initial large ball starts with downward/neutral drop
         balls = [{
             x: canvas.width / 2,
-            y: 150,
+            y: 100,
             vx: 3,
             vy: 0,
             size: 3
@@ -172,7 +174,7 @@
         if ((keys["ArrowLeft"] || keys["KeyA"]) && ship.x > 0) ship.x -= ship.speed;
         if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < canvas.width - ship.width) ship.x += ship.speed;
 
-        // Update Bullets
+        // Bullets
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
             b.y -= b.speed;
@@ -180,17 +182,17 @@
             if (b.y < 0) bullets.splice(i, 1);
         }
 
-        // Update Balls with Proper Bouncing Physics
+        // Balls True Physics Loop
         for (let i = balls.length - 1; i >= 0; i--) {
             let ball = balls[i];
             let config = ballConfigs[ball.size];
 
-            // Apply gravity and movement
-            ball.vy += config.gravity;
+            // Apply continuous gravity to velocity
+            ball.vy += gravity;
             ball.x += ball.vx;
             ball.y += ball.vy;
 
-            // Wall collisions (Left & Right) with strict position clamping to prevent sticking
+            // Perfect Wall Bounces with strict boundary clamping
             if (ball.x - config.radius < 0) {
                 ball.x = config.radius;
                 ball.vx *= -1;
@@ -199,13 +201,13 @@
                 ball.vx *= -1;
             }
 
-            // Floor collision (Bottom) with strict position clamping
-            if (ball.y + config.radius > canvas.height) {
+            // Perfect Floor Bounce: derived precisely from energy conservation (v = -sqrt(2 * g * height))
+            if (ball.y + config.radius >= canvas.height) {
                 ball.y = canvas.height - config.radius;
-                ball.vy = config.bounceVelocity;
+                ball.vy = -Math.sqrt(2 * gravity * config.bouncePeak);
             }
 
-            // Collision with ship
+            // Ship Collision Check
             let distX = (ship.x + ship.width / 2) - ball.x;
             let distY = (ship.y + ship.height / 2) - ball.y;
             let distance = Math.sqrt(distX * distX + distY * distY);
@@ -222,7 +224,7 @@
                 }
             }
 
-            // Collision with bullets
+            // Bullet Collision & Split Logic
             for (let j = bullets.length - 1; j >= 0; j--) {
                 let b = bullets[j];
                 let bDist = Math.hypot(b.x - ball.x, b.y - ball.y);
@@ -235,20 +237,20 @@
                     }
 
                     if (config.splitSize > 0) {
-                        // Spawn two new split balls with proper initial upward momentum and mirrored horizontal speeds
                         let nextConfig = ballConfigs[config.splitSize];
+                        // Spawn split fragments with clean opposing lateral trajectories and proper upward bounce energy
                         balls.push({ 
-                            x: ball.x - 5, 
+                            x: ball.x - 8, 
                             y: ball.y, 
-                            vx: -3.5, 
-                            vy: nextConfig.bounceVelocity * 0.75, 
+                            vx: -3.2, 
+                            vy: -Math.sqrt(2 * gravity * (config.bouncePeak * 0.75)), 
                             size: config.splitSize 
                         });
                         balls.push({ 
-                            x: ball.x + 5, 
+                            x: ball.x + 8, 
                             y: ball.y, 
-                            vx: 3.5, 
-                            vy: nextConfig.bounceVelocity * 0.75, 
+                            vx: 3.2, 
+                            vy: -Math.sqrt(2 * gravity * (config.bouncePeak * 0.75)), 
                             size: config.splitSize 
                         });
                     }
@@ -258,7 +260,7 @@
             }
         }
 
-        // Update Powerups
+        // Power-ups
         for (let i = powerUps.length - 1; i >= 0; i--) {
             let p = powerUps[i];
             p.y += p.speed;
