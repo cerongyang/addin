@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: https:; img-src * data: https:; style-src * 'unsafe-inline';">
-    <title>Neon Ball Splitter - Office Add-in</title>
+    <title>Neon Ball Splitter - Word Add-in</title>
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/scripts/office.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -26,46 +26,48 @@
             position: relative;
             width: 100%;
             height: 100%;
-            max-width: 480px;
-            max-height: 640px;
+            max-width: 400px;
             background: #0b0b12;
-            border: 2px solid #00ffff;
-            box-shadow: 0 0 20px rgba(0,255,255,0.3);
+            border-left: 2px solid #00ffff;
+            border-right: 2px solid #00ffff;
+            box-shadow: 0 0 15px rgba(0,255,255,0.2);
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
         }
         canvas {
             display: block;
             width: 100%;
-            height: 570px;
+            flex-grow: 1;
             background: #0b0b12;
         }
-        /* On-screen control bar for Office environments */
+        /* Responsive control bar optimized for Word taskpanes */
         #controls-bar {
             width: 100%;
-            height: 70px;
+            height: 65px;
             background: #11111a;
             border-top: 2px solid #00ffff;
             display: flex;
             justify-content: space-around;
             align-items: center;
-            padding: 0 10px;
+            padding: 0 8px;
+            flex-shrink: 0;
         }
         .ctrl-btn {
             background: rgba(0, 255, 255, 0.2);
             color: #00ffff;
             border: 2px solid #00ffff;
-            padding: 10px 20px;
-            font-size: 16px;
+            padding: 8px 12px;
+            font-size: 14px;
             font-weight: bold;
             cursor: pointer;
             border-radius: 6px;
             user-select: none;
             flex: 1;
-            margin: 0 5px;
+            margin: 0 4px;
             text-align: center;
+            touch-action: manipulation;
         }
         .ctrl-btn:active {
             background: #00ffff;
@@ -83,49 +85,49 @@
             justify-content: center;
             align-items: center;
             z-index: 10;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
             cursor: pointer;
         }
         h1 {
             color: #00ffff;
-            margin: 0 0 10px 0;
-            font-size: 24px;
-            text-shadow: 0 0 12px rgba(0,255,255,0.7);
-            letter-spacing: 2px;
+            margin: 0 0 8px 0;
+            font-size: 22px;
+            text-shadow: 0 0 10px rgba(0,255,255,0.7);
+            letter-spacing: 1px;
         }
         p {
             color: #aaa;
-            font-size: 12px;
-            margin-bottom: 20px;
+            font-size: 11px;
+            margin-bottom: 15px;
             line-height: 1.4;
         }
         .btn {
             background: linear-gradient(135deg, #00ffff, #0088ff);
             color: #000;
             border: none;
-            padding: 12px 30px;
-            font-size: 15px;
+            padding: 10px 24px;
+            font-size: 14px;
             font-weight: bold;
             cursor: pointer;
             border-radius: 6px;
-            box-shadow: 0 0 12px rgba(0,255,255,0.5);
+            box-shadow: 0 0 10px rgba(0,255,255,0.5);
             transition: 0.2s;
             pointer-events: auto;
         }
         .btn:hover {
             background: #fff;
-            box-shadow: 0 0 20px #fff;
-            transform: scale(1.05);
+            box-shadow: 0 0 15px #fff;
+            transform: scale(1.03);
         }
         #hud {
             position: absolute;
-            top: 10px;
-            left: 12px;
-            right: 12px;
+            top: 8px;
+            left: 10px;
+            right: 10px;
             display: flex;
             justify-content: space-between;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
             z-index: 5;
             pointer-events: none;
@@ -135,23 +137,22 @@
     </style>
 </head>
 <body>
-
 <div id="game-container">
     <div id="hud">
         <div id="score">SCORE: 0</div>
         <div id="level-display">LVL: 1</div>
         <div id="lives">LIVES: ❤️❤️❤️</div>
     </div>
-
+    
     <div id="ui" onclick="startGame()">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use <b>Arrow Keys</b>, <b>A/D</b>, or screen buttons to move.<br>Press <b>Spacebar</b> to fire lasers.<br>Click anywhere or press <b>Enter</b> to start!</p>
+        <p>Use screen buttons or <b>A/D / Arrows</b> to move.<br>Press <b>Spacebar</b> to fire lasers.<br>Click or press <b>Enter</b> to start!</p>
         <button class="btn" id="start-btn">PLAY GAME</button>
     </div>
+    
+    <canvas id="canvas" width="400" height="520"></canvas>
 
-    <canvas id="canvas" width="480" height="570"></canvas>
-
-    <!-- On-screen controls to bypass Office keyboard limitations -->
+    <!-- On-screen controls tailored for Office taskpane -->
     <div id="controls-bar">
         <div class="ctrl-btn" id="btn-left">◀ LEFT</div>
         <div class="ctrl-btn" id="btn-shoot">FIRE 🚀</div>
@@ -161,8 +162,8 @@
 
 <script>
     let canvas, ctx;
-    const WIDTH = 480;
-    const HEIGHT = 570;
+    const WIDTH = 400;
+    const HEIGHT = 520;
 
     let gameState = "MENU";
     let score = 0;
@@ -170,7 +171,7 @@
     let currentLevel = 1;
     let animId = null;
 
-    let ship = { x: WIDTH / 2 - 20, y: HEIGHT - 45, w: 40, h: 22, speed: 7 };
+    let ship = { x: WIDTH / 2 - 18, y: HEIGHT - 40, w: 36, h: 20, speed: 6.5 };
     let bullets = [];
     let balls = [];
     let powerUps = [];
@@ -185,7 +186,7 @@
         ctx = canvas.getContext("2d");
 
         if (stars.length === 0) {
-            for (let i = 0; i < 50; i++) {
+            for (let i = 0; i < 40; i++) {
                 stars.push({
                     x: Math.random() * WIDTH,
                     y: Math.random() * HEIGHT,
@@ -195,14 +196,12 @@
             }
         }
 
-        // Setup touch/mouse listeners for on-screen buttons
         const setupBtn = (id, actionDown, actionUp) => {
             let el = document.getElementById(id);
             if (!el) return;
-            el.addEventListener("mousedown", (e) => { e.preventDefault(); actionDown(); });
-            el.addEventListener("mouseup", (e) => { e.preventDefault(); actionUp(); });
-            el.addEventListener("touchstart", (e) => { e.preventDefault(); actionDown(); });
-            el.addEventListener("touchend", (e) => { e.preventDefault(); actionUp(); });
+            el.addEventListener("pointerdown", (e) => { e.preventDefault(); actionDown(); });
+            el.addEventListener("pointerup", (e) => { e.preventDefault(); actionUp(); });
+            el.addEventListener("pointerleave", (e) => { e.preventDefault(); actionUp(); });
         };
 
         setupBtn("btn-left", () => { keys["ArrowLeft"] = true; }, () => { keys["ArrowLeft"] = false; });
@@ -216,7 +215,6 @@
     window.addEventListener("DOMContentLoaded", () => { initApp(); });
 
     window.addEventListener("keydown", e => {
-        // Prevent Office from stealing arrow keys when playing
         if (["ArrowLeft", "ArrowRight", "Space", "KeyA", "KeyD"].includes(e.code)) {
             e.preventDefault();
         }
@@ -252,21 +250,21 @@
         loadLevel(currentLevel);
 
         document.getElementById("ui").style.display = "none";
-        window.focus(); // Force focus back to game window
+        window.focus();
         loop();
     }
 
     function loadLevel(lvl) {
         balls = [];
-        let ballCount = Math.min(lvl, 3);
+        let ballCount = Math.min(lvl, 2);
         for (let i = 0; i < ballCount; i++) {
-            let startX = WIDTH * (0.25 + (0.5 * (i / Math.max(1, ballCount - 1))));
+            let startX = WIDTH * (0.3 + (0.4 * i));
             if (ballCount === 1) startX = WIDTH / 2;
             
             balls.push({
                 x: startX,
-                y: 100 + (i * 20),
-                vx: (i % 2 === 0 ? 2.8 : -2.8),
+                y: 90 + (i * 20),
+                vx: (i % 2 === 0 ? 2.5 : -2.5),
                 vy: 0,
                 size: 3
             });
@@ -283,33 +281,33 @@
 
     function shoot() {
         if (laserLvl === 1) {
-            bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 14, spd: 13, vx: 0 });
+            bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 12, spd: 12, vx: 0 });
         } else {
-            bullets.push({ x: ship.x + 4, y: ship.y, w: 4, h: 14, spd: 13, vx: -1.8 });
-            bullets.push({ x: ship.x + ship.w - 8, y: ship.y, w: 4, h: 14, spd: 13, vx: 1.8 });
+            bullets.push({ x: ship.x + 3, y: ship.y, w: 4, h: 12, spd: 12, vx: -1.5 });
+            bullets.push({ x: ship.x + ship.w - 7, y: ship.y, w: 4, h: 12, spd: 12, vx: 1.5 });
         }
     }
 
     function spawnExplosion(x, y, color) {
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 12; i++) {
             let angle = Math.random() * Math.PI * 2;
-            let speed = Math.random() * 4 + 1;
+            let speed = Math.random() * 3.5 + 1;
             particles.push({
                 x: x, y: y,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
                 alpha: 1,
                 color: color,
-                size: Math.random() * 3 + 1
+                size: Math.random() * 2.5 + 1
             });
         }
     }
 
-    const gravity = 0.45;
+    const gravity = 0.42;
     const ballConfigs = {
-        3: { radius: 38, targetHeight: 380, color: "#ff2255", glow: "#ff7799", splitSize: 2, points: 100 },
-        2: { radius: 24, targetHeight: 270, color: "#ff8800", glow: "#ffbb55", splitSize: 1, points: 50 },
-        1: { radius: 15, targetHeight: 170, color: "#ffee00", glow: "#ffff88", splitSize: 0, points: 25 }
+        3: { radius: 32, targetHeight: 340, color: "#ff2255", glow: "#ff7799", splitSize: 2, points: 100 },
+        2: { radius: 21, targetHeight: 240, color: "#ff8800", glow: "#ffbb55", splitSize: 1, points: 50 },
+        1: { radius: 13, targetHeight: 150, color: "#ffee00", glow: "#ffff88", splitSize: 0, points: 25 }
     };
 
     function update() {
@@ -360,7 +358,7 @@
                     gameOver();
                     return;
                 } else {
-                    ball.y = 100;
+                    ball.y = 90;
                     ball.vy = 0;
                     ship.x = WIDTH / 2 - ship.w / 2;
                     break;
@@ -375,15 +373,14 @@
                     spawnExplosion(ball.x, ball.y, cfg.color);
 
                     if (Math.random() < 0.25) {
-                        powerUps.push({ x: ball.x, y: ball.y, r: 11, spd: 2.2 });
+                        powerUps.push({ x: ball.x, y: ball.y, r: 10, spd: 2 });
                     }
 
                     if (cfg.splitSize > 0) {
                         let nextCfg = ballConfigs[cfg.splitSize];
                         let splitBounce = -Math.sqrt(2 * gravity * (cfg.targetHeight * 0.75));
-                        
-                        balls.push({ x: ball.x - 6, y: ball.y, vx: -3.2, vy: splitBounce, size: cfg.splitSize });
-                        balls.push({ x: ball.x + 6, y: ball.y, vx: 3.2, vy: splitBounce, size: cfg.splitSize });
+                        balls.push({ x: ball.x - 5, y: ball.y, vx: -2.8, vy: splitBounce, size: cfg.splitSize });
+                        balls.push({ x: ball.x + 5, y: ball.y, vx: 2.8, vy: splitBounce, size: cfg.splitSize });
                     }
                     balls.splice(i, 1);
                     break;
@@ -395,7 +392,7 @@
             let p = particles[i];
             p.x += p.vx;
             p.y += p.vy;
-            p.alpha -= 0.03;
+            p.alpha -= 0.035;
             if (p.alpha <= 0) particles.splice(i, 1);
         }
 
@@ -413,7 +410,7 @@
 
         if (balls.length === 0) {
             currentLevel++;
-            score += 500 * currentLevel;
+            score += 400 * currentLevel;
             loadLevel(currentLevel);
         }
 
@@ -444,7 +441,7 @@
         }
 
         ctx.save();
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 12;
         ctx.shadowColor = "#00ffff";
         ctx.fillStyle = "#00ffff";
         ctx.beginPath();
@@ -454,11 +451,11 @@
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#ff5500";
-        ctx.fillRect(ship.x + ship.w / 2 - 4, ship.y + ship.h, 8, Math.random() * 8 + 4);
+        ctx.fillRect(ship.x + ship.w / 2 - 3, ship.y + ship.h, 6, Math.random() * 6 + 3);
         ctx.restore();
 
         ctx.save();
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 8;
         ctx.shadowColor = "#00ffcc";
         ctx.fillStyle = "#00ffcc";
         for (let b of bullets) {
@@ -468,9 +465,8 @@
 
         for (let ball of balls) {
             let cfg = ballConfigs[ball.size];
-            
             ctx.save();
-            ctx.shadowBlur = 18;
+            ctx.shadowBlur = 14;
             ctx.shadowColor = cfg.glow;
 
             let grad = ctx.createRadialGradient(ball.x - cfg.radius/3, ball.y - cfg.radius/3, cfg.radius/8, ball.x, ball.y, cfg.radius);
@@ -484,30 +480,29 @@
             ctx.fill();
 
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.5;
             ctx.stroke();
 
             ctx.fillStyle = "#ffffff";
-            ctx.font = `bold ${Math.floor(cfg.radius * 0.9)}px sans-serif`;
+            ctx.font = `bold ${Math.floor(cfg.radius * 0.85)}px sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.shadowBlur = 5;
+            ctx.shadowBlur = 4;
             ctx.shadowColor = "#000";
             ctx.fillText(ball.size, ball.x, ball.y);
-
             ctx.restore();
         }
 
         for (let p of powerUps) {
             ctx.save();
-            ctx.shadowBlur = 12;
+            ctx.shadowBlur = 10;
             ctx.shadowColor = "#00ff00";
             ctx.fillStyle = "#00ff00";
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = "#000";
-            ctx.font = "bold 10px sans-serif";
+            ctx.font = "bold 9px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText("UP", p.x, p.y);
@@ -522,6 +517,5 @@
         animId = requestAnimationFrame(loop);
     }
 </script>
-
 </body>
 </html>
