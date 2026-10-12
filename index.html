@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Neon Ball Splitter - Auto Leveling</title>
+    <title>Neon Ball Splitter - Arcade</title>
     <style>
         body {
             margin: 0;
@@ -33,7 +33,7 @@
             left: 0;
             width: 480px;
             height: 640px;
-            background: rgba(5, 5, 8, 0.9);
+            background: rgba(5, 5, 8, 0.95);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -99,8 +99,8 @@
 
     <div id="ui">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Press <b>Enter</b> or click Play to start!</p>
-        <button class="btn" id="start-btn" onclick="startGame()">PLAY GAME</button>
+        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Click Play or press <b>Enter</b> to start!</p>
+        <button class="btn" id="start-btn">PLAY GAME</button>
     </div>
 
     <canvas id="canvas" width="480" height="640"></canvas>
@@ -138,10 +138,14 @@
         });
     }
 
+    // Explicit button event listener to guarantee click functionality
+    document.getElementById("start-btn").addEventListener("click", () => {
+        startGame();
+    });
+
     window.addEventListener("keydown", e => {
         keys[e.code] = true;
         
-        // Start or restart game when pressing Enter from MENU or GAMEOVER state
         if (e.code === "Enter" && gameState !== "PLAYING") {
             e.preventDefault();
             startGame();
