@@ -92,7 +92,7 @@
     
     <div id="ui-overlay">
         <h1 id="menu-title">BALL SPLITTER</h1>
-        <p id="menu-desc">Use <b>A/D</b> or <b>Arrow Keys</b> to move. Press <b>Space</b> to shoot lasers. Destroy balls as they split into smaller pieces, collect falling upgrades, and avoid getting hit!</p>
+        <p id="menu-desc">Use <b>A/D</b> or <b>Arrow Keys</b> to move. Press <b>Space</b> to shoot lasers. Destroy balls, collect falling upgrades, and avoid getting hit!</p>
         <button class="btn" id="play-btn" onclick="startGame()">PLAY GAME</button>
     </div>
 
@@ -103,28 +103,25 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    // Game States
-    let gameState = "MENU"; // MENU, PLAYING, GAMEOVER
+    let gameState = "MENU";
     let score = 0;
     let lives = 3;
 
-    // Controls
     const keys = {};
     window.addEventListener("keydown", e => { keys[e.code] = true; if(e.code === "Space" && gameState === "PLAYING") shootLaser(); });
     window.addEventListener("keyup", e => { keys[e.code] = false; });
 
-    // Entities
     let ship = { x: 400, y: 530, width: 40, height: 20, speed: 6, color: "#00ffff" };
     let bullets = [];
     let balls = [];
     let powerUps = [];
-    let laserLevel = 1; // 1: single, 2: double, 3: triple spread
+    let laserLevel = 1;
 
-    // Ball configurations by size level (3 = large, 2 = medium, 1 = small)
+    // Ball physics configurations (bounceHeight controls upward velocity on floor impact)
     const ballConfigs = {
-        3: { radius: 40, speedY: -8, gravity: 0.35, color: "#ff3366", splitSize: 2, scoreVal: 100 },
-        2: { radius: 25, speedY: -6, gravity: 0.35, color: "#ff9933", splitSize: 1, scoreVal: 50 },
-        1: { radius: 15, speedY: -4, gravity: 0.35, color: "#ffff33", splitSize: 0, scoreVal: 25 }
+        3: { radius: 40, bounceVelocity: -12.5, gravity: 0.4, color: "#ff3366", splitSize: 2, scoreVal: 100 },
+        2: { radius: 25, bounceVelocity: -10.5, gravity: 0.4, color: "#ff9933", splitSize: 1, scoreVal: 50 },
+        1: { radius: 15, bounceVelocity: -8.5, gravity:  0.4, color: "#ffff33", splitSize: 0, scoreVal: 25 }
     };
 
     function startGame() {
@@ -136,7 +133,6 @@
         powerUps = [];
         ship.x = canvas.width / 2 - ship.width / 2;
         
-        // Spawn initial large ball
         balls = [{
             x: canvas.width / 2,
             y: 150,
@@ -173,7 +169,6 @@
     function update() {
         if (gameState !== "PLAYING") return;
 
-        // Ship movement
         if ((keys["ArrowLeft"] || keys["KeyA"]) && ship.x > 0) ship.x -= ship.speed;
         if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < canvas.width - ship.width) ship.x += ship.speed;
 
@@ -185,16 +180,17 @@
             if (b.y < 0) bullets.splice(i, 1);
         }
 
-        // Update Balls
+        // Update Balls with Proper Bouncing Physics
         for (let i = balls.length - 1; i >= 0; i--) {
             let ball = balls[i];
             let config = ballConfigs[ball.size];
 
+            // Apply gravity and movement
             ball.vy += config.gravity;
             ball.x += ball.vx;
             ball.y += ball.vy;
 
-            // Bounce off walls
+            // Wall collisions (Left & Right) with strict position clamping to prevent sticking
             if (ball.x - config.radius < 0) {
                 ball.x = config.radius;
                 ball.vx *= -1;
@@ -203,13 +199,13 @@
                 ball.vx *= -1;
             }
 
-            // Bounce off floor
+            // Floor collision (Bottom) with strict position clamping
             if (ball.y + config.radius > canvas.height) {
                 ball.y = canvas.height - config.radius;
-                ball.vy = config.speedY; // bounce up
+                ball.vy = config.bounceVelocity;
             }
 
-            // Collision with ship (Death check)
+            // Collision with ship
             let distX = (ship.x + ship.width / 2) - ball.x;
             let distY = (ship.y + ship.height / 2) - ball.y;
             let distance = Math.sqrt(distX * distX + distY * distY);
@@ -220,7 +216,6 @@
                     gameOver();
                     return;
                 } else {
-                    // Respawn ball safely and reset ship position
                     ball.y = 100;
                     ship.x = canvas.width / 2 - ship.width / 2;
                     break;
@@ -232,19 +227,30 @@
                 let b = bullets[j];
                 let bDist = Math.hypot(b.x - ball.x, b.y - ball.y);
                 if (bDist < config.radius) {
-                    // Remove bullet
                     bullets.splice(j, 1);
                     score += config.scoreVal;
 
-                    // Chance to drop powerup (25% chance)
                     if (Math.random() < 0.25) {
                         powerUps.push({ x: ball.x, y: ball.y, size: 12, speed: 2 });
                     }
 
-                    // Split or destroy ball
                     if (config.splitSize > 0) {
-                        balls.push({ x: ball.x, y: ball.y, vx: -3, vy: config.speedY * 0.7, size: config.splitSize });
-                        balls.push({ x: ball.x, y: ball.y, vx: 3, vy: config.speedY * 0.7, size: config.splitSize });
+                        // Spawn two new split balls with proper initial upward momentum and mirrored horizontal speeds
+                        let nextConfig = ballConfigs[config.splitSize];
+                        balls.push({ 
+                            x: ball.x - 5, 
+                            y: ball.y, 
+                            vx: -3.5, 
+                            vy: nextConfig.bounceVelocity * 0.75, 
+                            size: config.splitSize 
+                        });
+                        balls.push({ 
+                            x: ball.x + 5, 
+                            y: ball.y, 
+                            vx: 3.5, 
+                            vy: nextConfig.bounceVelocity * 0.75, 
+                            size: config.splitSize 
+                        });
                     }
                     balls.splice(i, 1);
                     break;
@@ -257,7 +263,6 @@
             let p = powerUps[i];
             p.y += p.speed;
 
-            // Check collision with ship
             if (p.x > ship.x && p.x < ship.x + ship.width && p.y > ship.y && p.y < ship.y + ship.height) {
                 if (laserLevel < 3) laserLevel++;
                 powerUps.splice(i, 1);
@@ -265,16 +270,13 @@
                 continue;
             }
 
-            // Remove if off screen
             if (p.y > canvas.height) powerUps.splice(i, 1);
         }
 
-        // Win condition check: if all balls cleared, spawn a fresh one
         if (balls.length === 0) {
             balls.push({ x: canvas.width / 2, y: 150, vx: 3, vy: 0, size: 3 });
         }
 
-        // Update UI Text
         document.getElementById("score-display").innerText = `Score: ${score}`;
         document.getElementById("lives-display").innerText = `Lives: ${"❤️".repeat(lives)}`;
     }
@@ -282,7 +284,7 @@
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw Ship
+        // Ship
         ctx.fillStyle = ship.color;
         ctx.beginPath();
         ctx.moveTo(ship.x + ship.width / 2, ship.y);
@@ -291,13 +293,13 @@
         ctx.closePath();
         ctx.fill();
 
-        // Draw Bullets
+        // Bullets
         ctx.fillStyle = "#00ffcc";
         for (let b of bullets) {
             ctx.fillRect(b.x, b.y, b.width, b.height);
         }
 
-        // Draw Balls
+        // Balls
         for (let ball of balls) {
             let config = ballConfigs[ball.size];
             ctx.fillStyle = config.color;
@@ -309,7 +311,7 @@
             ctx.stroke();
         }
 
-        // Draw Powerups
+        // Powerups
         for (let p of powerUps) {
             ctx.fillStyle = "#00ff00";
             ctx.beginPath();
