@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ball Splitter Arcade</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            border: 2px solid #333;
+        }
+        canvas {
+            background: #1a1a1a;
+            display: block;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        p {
+            color: #aaa;
+            margin-bottom: 20px;
+            text-align: center;
+            max-width: 400px;
+        }
+        .btn {
+            background: #00ffff;
+            color: #111;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: 0.2s;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+        }
+        .btn:hover {
+            background: #fff;
+            box-shadow: 0 0 15px #fff;
+        }
+        #hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 5;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="hud">
+        <div id="score-display">Score: 0</div>
+        <div id="lives-display">Lives: 3</div>
+    </div>
+    
+    <div id="ui-overlay">
+        <h1 id="menu-title">BALL SPLITTER</h1>
+        <p id="menu-desc">Use <b>A/D</b> or <b>Arrow Keys</b> to move. Press <b>Space</b> to shoot lasers. Destroy balls as they split into smaller pieces, collect falling upgrades, and avoid getting hit!</p>
+        <button class="btn" id="play-btn" onclick="startGame()">PLAY GAME</button>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Game States
+    let gameState = "MENU"; // MENU, PLAYING, GAMEOVER
+    let score = 0;
+    let lives = 3;
+
+    // Controls
+    const keys = {};
+    window.addEventListener("keydown", e => { keys[e.code] = true; if(e.code === "Space" && gameState === "PLAYING") shootLaser(); });
+    window.addEventListener("keyup", e => { keys[e.code] = false; });
+
+    // Entities
+    let ship = { x: 400, y: 530, width: 40, height: 20, speed: 6, color: "#00ffff" };
+    let bullets = [];
+    let balls = [];
+    let powerUps = [];
+    let laserLevel = 1; // 1: single, 2: double, 3: triple spread
+
+    // Ball configurations by size level (3 = large, 2 = medium, 1 = small)
+    const ballConfigs = {
+        3: { radius: 40, speedY: -8, gravity: 0.35, color: "#ff3366", splitSize: 2, scoreVal: 100 },
+        2: { radius: 25, speedY: -6, gravity: 0.35, color: "#ff9933", splitSize: 1, scoreVal: 50 },
+        1: { radius: 15, speedY: -4, gravity: 0.35, color: "#ffff33", splitSize: 0, scoreVal: 25 }
+    };
+
+    function startGame() {
+        gameState = "PLAYING";
+        score = 0;
+        lives = 3;
+        laserLevel = 1;
+        bullets = [];
+        powerUps = [];
+        ship.x = canvas.width / 2 - ship.width / 2;
+        
+        // Spawn initial large ball
+        balls = [{
+            x: canvas.width / 2,
+            y: 150,
+            vx: 3,
+            vy: 0,
+            size: 3
+        }];
+
+        document.getElementById("ui-overlay").style.display = "none";
+        loop();
+    }
+
+    function gameOver() {
+        gameState = "GAMEOVER";
+        document.getElementById("menu-title").innerText = "GAME OVER";
+        document.getElementById("menu-desc").innerText = `Final Score: ${score}`;
+        document.getElementById("play-btn").innerText = "PLAY AGAIN";
+        document.getElementById("ui-overlay").style.display = "flex";
+    }
+
+    function shootLaser() {
+        if (laserLevel === 1) {
+            bullets.push({ x: ship.x + ship.width / 2 - 2, y: ship.y, width: 4, height: 12, speed: 10 });
+        } else if (laserLevel === 2) {
+            bullets.push({ x: ship.x + 8, y: ship.y, width: 4, height: 12, speed: 10 });
+            bullets.push({ x: ship.x + ship.width - 12, y: ship.y, width: 4, height: 12, speed: 10 });
+        } else {
+            bullets.push({ x: ship.x + ship.width / 2 - 2, y: ship.y, width: 4, height: 12, speed: 10, vx: 0 });
+            bullets.push({ x: ship.x + 4, y: ship.y, width: 4, height: 12, speed: 10, vx: -2 });
+            bullets.push({ x: ship.x + ship.width - 8, y: ship.y, width: 4, height: 12, speed: 10, vx: 2 });
+        }
+    }
+
+    function update() {
+        if (gameState !== "PLAYING") return;
+
+        // Ship movement
+        if ((keys["ArrowLeft"] || keys["KeyA"]) && ship.x > 0) ship.x -= ship.speed;
+        if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < canvas.width - ship.width) ship.x += ship.speed;
+
+        // Update Bullets
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i];
+            b.y -= b.speed;
+            if (b.vx) b.x += b.vx;
+            if (b.y < 0) bullets.splice(i, 1);
+        }
+
+        // Update Balls
+        for (let i = balls.length - 1; i >= 0; i--) {
+            let ball = balls[i];
+            let config = ballConfigs[ball.size];
+
+            ball.vy += config.gravity;
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            // Bounce off walls
+            if (ball.x - config.radius < 0) {
+                ball.x = config.radius;
+                ball.vx *= -1;
+            } else if (ball.x + config.radius > canvas.width) {
+                ball.x = canvas.width - config.radius;
+                ball.vx *= -1;
+            }
+
+            // Bounce off floor
+            if (ball.y + config.radius > canvas.height) {
+                ball.y = canvas.height - config.radius;
+                ball.vy = config.speedY; // bounce up
+            }
+
+            // Collision with ship (Death check)
+            let distX = (ship.x + ship.width / 2) - ball.x;
+            let distY = (ship.y + ship.height / 2) - ball.y;
+            let distance = Math.sqrt(distX * distX + distY * distY);
+
+            if (distance < config.radius + ship.width / 4) {
+                lives--;
+                if (lives <= 0) {
+                    gameOver();
+                    return;
+                } else {
+                    // Respawn ball safely and reset ship position
+                    ball.y = 100;
+                    ship.x = canvas.width / 2 - ship.width / 2;
+                    break;
+                }
+            }
+
+            // Collision with bullets
+            for (let j = bullets.length - 1; j >= 0; j--) {
+                let b = bullets[j];
+                let bDist = Math.hypot(b.x - ball.x, b.y - ball.y);
+                if (bDist < config.radius) {
+                    // Remove bullet
+                    bullets.splice(j, 1);
+                    score += config.scoreVal;
+
+                    // Chance to drop powerup (25% chance)
+                    if (Math.random() < 0.25) {
+                        powerUps.push({ x: ball.x, y: ball.y, size: 12, speed: 2 });
+                    }
+
+                    // Split or destroy ball
+                    if (config.splitSize > 0) {
+                        balls.push({ x: ball.x, y: ball.y, vx: -3, vy: config.speedY * 0.7, size: config.splitSize });
+                        balls.push({ x: ball.x, y: ball.y, vx: 3, vy: config.speedY * 0.7, size: config.splitSize });
+                    }
+                    balls.splice(i, 1);
+                    break;
+                }
+            }
+        }
+
+        // Update Powerups
+        for (let i = powerUps.length - 1; i >= 0; i--) {
+            let p = powerUps[i];
+            p.y += p.speed;
+
+            // Check collision with ship
+            if (p.x > ship.x && p.x < ship.x + ship.width && p.y > ship.y && p.y < ship.y + ship.height) {
+                if (laserLevel < 3) laserLevel++;
+                powerUps.splice(i, 1);
+                score += 200;
+                continue;
+            }
+
+            // Remove if off screen
+            if (p.y > canvas.height) powerUps.splice(i, 1);
+        }
+
+        // Win condition check: if all balls cleared, spawn a fresh one
+        if (balls.length === 0) {
+            balls.push({ x: canvas.width / 2, y: 150, vx: 3, vy: 0, size: 3 });
+        }
+
+        // Update UI Text
+        document.getElementById("score-display").innerText = `Score: ${score}`;
+        document.getElementById("lives-display").innerText = `Lives: ${"❤️".repeat(lives)}`;
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Ship
+        ctx.fillStyle = ship.color;
+        ctx.beginPath();
+        ctx.moveTo(ship.x + ship.width / 2, ship.y);
+        ctx.lineTo(ship.x, ship.y + ship.height);
+        ctx.lineTo(ship.x + ship.width, ship.y + ship.height);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw Bullets
+        ctx.fillStyle = "#00ffcc";
+        for (let b of bullets) {
+            ctx.fillRect(b.x, b.y, b.width, b.height);
+        }
+
+        // Draw Balls
+        for (let ball of balls) {
+            let config = ballConfigs[ball.size];
+            ctx.fillStyle = config.color;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, config.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Draw Powerups
+        for (let p of powerUps) {
+            ctx.fillStyle = "#00ff00";
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#111";
+            ctx.font = "bold 12px sans-serif";
+            ctx.fillText("UP", p.x - 9, p.y + 4);
+        }
+    }
+
+    function loop() {
+        if (gameState !== "PLAYING") return;
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+</script>
+
+</body>
+</html>
