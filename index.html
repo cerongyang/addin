@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Neon Ball Splitter Arcade</title>
+    <title>Neon Ball Splitter - Multi-Level Arcade</title>
     <style>
         body {
             margin: 0;
@@ -79,7 +79,7 @@
             right: 15px;
             display: flex;
             justify-content: space-between;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: bold;
             z-index: 5;
             pointer-events: none;
@@ -93,12 +93,13 @@
 <div id="game-container">
     <div id="hud">
         <div id="score">SCORE: 0</div>
+        <div id="level-display">LEVEL: 1</div>
         <div id="lives">LIVES: ❤️❤️❤️</div>
     </div>
 
     <div id="ui">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Destroy splitting balls and catch upgrades!</p>
+        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Clear all balls to advance through multiple levels!</p>
         <button class="btn" id="start-btn" onclick="startGame()">PLAY GAME</button>
     </div>
 
@@ -115,6 +116,7 @@
     let gameState = "MENU";
     let score = 0;
     let lives = 3;
+    let currentLevel = 1;
     let animId = null;
 
     let ship = { x: WIDTH / 2 - 20, y: HEIGHT - 50, w: 40, h: 22, speed: 7 };
@@ -151,22 +153,35 @@
         gameState = "PLAYING";
         score = 0;
         lives = 3;
+        currentLevel = 1;
         laserLvl = 1;
         bullets = [];
         powerUps = [];
         particles = [];
         ship.x = WIDTH / 2 - ship.w / 2;
 
-        balls = [{
-            x: WIDTH / 2,
-            y: 120,
-            vx: 3,
-            vy: 0,
-            size: 3
-        }];
+        loadLevel(currentLevel);
 
         document.getElementById("ui").style.display = "none";
         loop();
+    }
+
+    function loadLevel(lvl) {
+        balls = [];
+        // Scale number of initial balls and horizontal velocities based on level difficulty
+        let ballCount = Math.min(lvl, 3); // Max 3 starting giant balls per wave
+        for (let i = 0; i < ballCount; i++) {
+            let startX = WIDTH * (0.25 + (0.5 * (i / Math.max(1, ballCount - 1))));
+            if (ballCount === 1) startX = WIDTH / 2;
+            
+            balls.push({
+                x: startX,
+                y: 120 + (i * 20),
+                vx: (i % 2 === 0 ? 2.5 : -2.5) * (1 + (lvl - 1) * 0.1),
+                vy: 0,
+                size: 3
+            });
+        }
     }
 
     function gameOver() {
@@ -317,11 +332,15 @@
             if (p.y > HEIGHT) powerUps.splice(i, 1);
         }
 
+        // Level Completion Check: if all balls cleared, advance level!
         if (balls.length === 0) {
-            balls.push({ x: WIDTH / 2, y: 120, vx: 3, vy: 0, size: 3 });
+            currentLevel++;
+            score += 500 * currentLevel; // Level clear bonus
+            loadLevel(currentLevel);
         }
 
         document.getElementById("score").innerText = `SCORE: ${score}`;
+        document.getElementById("level-display").innerText = `LEVEL: ${currentLevel}`;
         document.getElementById("lives").innerText = `LIVES: ${"❤️".repeat(lives)}`;
     }
 
