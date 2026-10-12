@@ -2,14 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Neon Ball Splitter - Arcade</title>
+    <title>Neon Ball Splitter - Office Add-in</title>
+    <!-- Microsoft Office JavaScript API -->
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/scripts/office.js"></script>
     <style>
         body {
             margin: 0;
+            padding: 0;
             background: #050508;
             display: flex;
             justify-content: center;
             align-items: center;
+            width: 100vw;
             height: 100vh;
             color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -17,69 +21,79 @@
         }
         #game-container {
             position: relative;
-            width: 480px;
-            height: 640px;
+            width: 100%;
+            height: 100%;
+            max-width: 480px;
+            max-height: 640px;
             background: #0b0b12;
             border: 2px solid #00ffff;
-            box-shadow: 0 0 30px rgba(0,255,255,0.4);
+            box-shadow: 0 0 20px rgba(0,255,255,0.3);
             overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         canvas {
             display: block;
+            background: #0b0b12;
+            width: 100%;
+            height: 100%;
         }
         #ui {
             position: absolute;
             top: 0;
             left: 0;
-            width: 480px;
-            height: 640px;
+            width: 100%;
+            height: 100%;
             background: rgba(5, 5, 8, 0.95);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 10;
+            box-sizing: border-box;
+            padding: 20px;
         }
         h1 {
             color: #00ffff;
             margin-bottom: 5px;
-            font-size: 28px;
-            text-shadow: 0 0 15px rgba(0,255,255,0.7);
+            font-size: 24px;
+            text-shadow: 0 0 12px rgba(0,255,255,0.7);
             letter-spacing: 2px;
+            text-align: center;
         }
         p {
             color: #aaa;
-            font-size: 13px;
+            font-size: 12px;
             text-align: center;
-            padding: 0 30px;
-            margin-bottom: 25px;
-            line-height: 1.5;
+            margin-bottom: 20px;
+            line-height: 1.4;
         }
         .btn {
             background: linear-gradient(135deg, #00ffff, #0088ff);
             color: #000;
             border: none;
-            padding: 14px 35px;
-            font-size: 16px;
+            padding: 12px 30px;
+            font-size: 15px;
             font-weight: bold;
             cursor: pointer;
             border-radius: 6px;
-            box-shadow: 0 0 15px rgba(0,255,255,0.5);
+            box-shadow: 0 0 12px rgba(0,255,255,0.5);
             transition: 0.2s;
         }
         .btn:hover {
             background: #fff;
-            box-shadow: 0 0 25px #fff;
+            box-shadow: 0 0 20px #fff;
             transform: scale(1.05);
         }
         #hud {
             position: absolute;
-            top: 12px;
-            left: 15px;
-            right: 15px;
+            top: 10px;
+            left: 12px;
+            right: 12px;
             display: flex;
             justify-content: space-between;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
             z-index: 5;
             pointer-events: none;
@@ -99,7 +113,7 @@
 
     <div id="ui">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire glowing lasers.<br>Click Play or press <b>Enter</b> to start!</p>
+        <p>Use <b>Arrow Keys</b> or <b>A/D</b> to move.<br>Press <b>Spacebar</b> to fire lasers.<br>Click Play or press <b>Enter</b> to start!</p>
         <button class="btn" id="start-btn">PLAY GAME</button>
     </div>
 
@@ -107,9 +121,7 @@
 </div>
 
 <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-
+    let canvas, ctx;
     const WIDTH = 480;
     const HEIGHT = 640;
 
@@ -128,20 +140,43 @@
     let laserLvl = 1;
     let keys = {};
 
-    // Generate background starfield
-    for (let i = 0; i < 50; i++) {
-        stars.push({
-            x: Math.random() * WIDTH,
-            y: Math.random() * HEIGHT,
-            size: Math.random() * 2,
-            speed: Math.random() * 0.5 + 0.2
+    // Office Add-in initialization lifecycle hook
+    Office.onReady((info) => {
+        console.log("Office Add-in environment ready.");
+        initApp();
+    });
+
+    // Fallback standard browser init if tested outside Office
+    window.addEventListener("DOMContentLoaded", () => {
+        if (!canvas) {
+            initApp();
+        }
+    });
+
+    function initApp() {
+        canvas = document.getElementById("canvas");
+        ctx = canvas.getContext("2d");
+
+        // Generate background starfield
+        if (stars.length === 0) {
+            for (let i = 0; i < 50; i++) {
+                stars.push({
+                    x: Math.random() * WIDTH,
+                    y: Math.random() * HEIGHT,
+                    size: Math.random() * 2,
+                    speed: Math.random() * 0.5 + 0.2
+                });
+            }
+        }
+
+        // Attach reliable click event listener to the play button
+        const startBtn = document.getElementById("start-btn");
+        startBtn.replaceWith(startBtn.cloneNode(true)); // Clear old listeners
+        document.getElementById("start-btn").addEventListener("click", (e) => {
+            e.preventDefault();
+            startGame();
         });
     }
-
-    // Explicit button event listener to guarantee click functionality
-    document.getElementById("start-btn").addEventListener("click", () => {
-        startGame();
-    });
 
     window.addEventListener("keydown", e => {
         keys[e.code] = true;
@@ -159,6 +194,7 @@
     window.addEventListener("keyup", e => { keys[e.code] = false; });
 
     function startGame() {
+        if (!canvas) initApp();
         if (animId) cancelAnimationFrame(animId);
 
         gameState = "PLAYING";
@@ -200,6 +236,14 @@
         document.getElementById("title").innerText = "GAME OVER";
         document.getElementById("start-btn").innerText = "PLAY AGAIN";
         document.getElementById("ui").style.display = "flex";
+        
+        // Re-bind click listener for the restart state
+        const startBtn = document.getElementById("start-btn");
+        startBtn.replaceWith(startBtn.cloneNode(true));
+        document.getElementById("start-btn").addEventListener("click", (e) => {
+            e.preventDefault();
+            startGame();
+        });
     }
 
     function shoot() {
