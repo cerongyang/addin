@@ -32,6 +32,7 @@
             flex-direction: column;
             justify-content: space-between;
             align-items: center;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
         }
         canvas {
             display: block;
@@ -65,10 +66,12 @@
             margin: 0 3px;
             text-align: center;
             touch-action: manipulation;
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
         }
         .ctrl-btn:active {
             background: #00ffff;
             color: #000;
+            box-shadow: 0 0 15px #00ffff;
         }
         #ui {
             position: absolute;
@@ -90,7 +93,8 @@
             color: #00ffff;
             margin: 0 0 6px 0;
             font-size: 18px;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
         }
         p {
             color: #aaa;
@@ -107,6 +111,7 @@
             font-weight: bold;
             cursor: pointer;
             border-radius: 4px;
+            box-shadow: 0 0 12px rgba(0, 255, 255, 0.6);
         }
         #hud {
             position: absolute;
@@ -115,29 +120,31 @@
             right: 8px;
             display: flex;
             justify-content: space-between;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: bold;
             z-index: 5;
             pointer-events: none;
             color: #00ffff;
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.6);
         }
     </style>
 </head>
-<body>
+<body onclick="ensureFocus()">
 <div id="game-container">
     <div id="hud">
         <div id="score">SCORE: 0</div>
         <div id="level-display">LVL: 1</div>
+        <div id="upgrade-status">PWR: NONE</div>
         <div id="lives">LIVES: ❤️❤️❤️</div>
     </div>
     
     <div id="ui" onclick="startGame()">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use buttons or <b>A/D / Arrows</b>.<br>Press <b>Spacebar</b> to fire.<br>Click to start!</p>
+        <p>Use buttons or <b>A/D / Arrows</b>.<br>Press <b>Spacebar</b> to fire.<br>Catch falling upgrades!<br>Click to start!</p>
         <button class="btn" id="start-btn">PLAY GAME</button>
     </div>
     
-    <canvas id="canvas" width="320" height="420" tabindex="0"></canvas>
+    <canvas id="canvas" width="320" height="420" tabindex="1"></canvas>
 
     <div id="controls-bar">
         <div class="ctrl-btn" id="btn-left">◀ LEFT</div>
@@ -161,17 +168,32 @@
     let bullets = [];
     let balls = [];
     let particles = [];
+    let powerUps = [];
     let keys = {};
+    
+    let activePowerUp = null;
+    let powerUpTimer = 0;
+
+    function ensureFocus() {
+        if (canvas) {
+            canvas.focus();
+        }
+    }
 
     function initApp() {
         canvas = document.getElementById("canvas");
         if (!canvas) return;
         ctx = canvas.getContext("2d");
+        ensureFocus();
 
         const setupBtn = (id, actionDown, actionUp) => {
             let el = document.getElementById(id);
             if (!el) return;
-            el.addEventListener("pointerdown", (e) => { e.preventDefault(); actionDown(); });
+            el.addEventListener("pointerdown", (e) => { 
+                e.preventDefault(); 
+                ensureFocus();
+                actionDown(); 
+            });
             el.addEventListener("pointerup", (e) => { e.preventDefault(); actionUp(); });
             el.addEventListener("pointerleave", (e) => { e.preventDefault(); actionUp(); });
         };
@@ -179,12 +201,15 @@
         setupBtn("btn-left", () => { keys["ArrowLeft"] = true; }, () => { keys["ArrowLeft"] = false; });
         setupBtn("btn-right", () => { keys["ArrowRight"] = true; }, () => { keys["ArrowRight"] = false; });
         setupBtn("btn-shoot", () => { if (gameState === "PLAYING") shoot(); }, () => {});
+        
+        canvas.addEventListener("click", () => ensureFocus());
     }
 
     if (typeof Office !== 'undefined' && Office.onReady) {
         Office.onReady(() => { initApp(); });
     }
     window.addEventListener("DOMContentLoaded", () => { initApp(); });
+    window.addEventListener("focus", () => { ensureFocus(); });
 
     window.addEventListener("keydown", e => {
         if (["ArrowLeft", "ArrowRight", "Space", "KeyA", "KeyD"].includes(e.code)) {
@@ -215,20 +240,31 @@
         currentLevel = 1;
         bullets = [];
         particles = [];
+        powerUps = [];
+        activePowerUp = null;
+        powerUpTimer = 0;
         ship.x = WIDTH / 2 - ship.w / 2;
 
         loadLevel(currentLevel);
 
         document.getElementById("ui").style.display = "none";
-        window.focus();
-        if (canvas) canvas.focus();
+        ensureFocus();
 
         loop();
     }
 
     function loadLevel(lvl) {
         balls = [];
-        balls.push({ x: WIDTH / 2, y: 80, vx: 2.2, vy: 0, size: 3 });
+        let count = Math.min(1 + Math.floor(lvl / 2), 3);
+        for (let i = 0; i < count; i++) {
+            balls.push({ 
+                x: WIDTH / 2 + (i - 0.5) * 60, 
+                y: 60 + i * 20, 
+                vx: (i % 2 === 0 ? 1 : -1) * (2.0 + lvl * 0.1), 
+                vy: 0, 
+                size: Math.min(3, 1 + Math.floor(lvl / 3)) 
+            });
+        }
     }
 
     function gameOver() {
@@ -240,21 +276,36 @@
     }
 
     function shoot() {
-        bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 10, spd: 10 });
+        if (activePowerUp === "TRIPLE") {
+            bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 10, spd: 11, vx: 0 });
+            bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 10, spd: 11, vx: -1.5 });
+            bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 10, spd: 11, vx: 1.5 });
+        } else {
+            bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y, w: 4, h: 10, spd: 10, vx: 0 });
+        }
     }
 
     function spawnExplosion(x, y, color) {
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < 10; i++) {
             let angle = Math.random() * Math.PI * 2;
-            let speed = Math.random() * 3 + 1;
+            let speed = Math.random() * 4 + 1;
             particles.push({
                 x: x, y: y,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
                 alpha: 1,
                 color: color,
-                size: Math.random() * 2 + 1
+                size: Math.random() * 2.5 + 1
             });
+        }
+    }
+
+    function spawnPowerUp(x, y) {
+        if (Math.random() < 0.35) {
+            let types = ["TRIPLE", "SHIELD", "SPEED"];
+            let type = types[Math.floor(Math.random() * types.length)];
+            let color = type === "TRIPLE" ? "#ff00ff" : (type === "SHIELD" ? "#00ff66" : "#00ccff");
+            powerUps.push({ x: x, y: y, vy: 1.5, type: type, color: color, size: 10 });
         }
     }
 
@@ -268,12 +319,35 @@
     function update() {
         if (gameState !== "PLAYING") return;
 
-        if ((keys["ArrowLeft"] || keys["KeyA"]) && ship.x > 0) ship.x -= ship.speed;
-        if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < WIDTH - ship.w) ship.x += ship.speed;
+        let currentSpeed = ship.speed * (activePowerUp === "SPEED" ? 1.4 : 1.0);
+        if ((keys["ArrowLeft"] || keys["KeyA"]) && ship.x > 0) ship.x -= currentSpeed;
+        if ((keys["ArrowRight"] || keys["KeyD"]) && ship.x < WIDTH - ship.w) ship.x += currentSpeed;
+
+        if (powerUpTimer > 0) {
+            powerUpTimer--;
+            if (powerUpTimer <= 0) activePowerUp = null;
+        }
 
         for (let i = bullets.length - 1; i >= 0; i--) {
-            bullets[i].y -= bullets[i].spd;
-            if (bullets[i].y < 0) bullets.splice(i, 1);
+            let b = bullets[i];
+            b.y -= b.spd;
+            if (b.vx) b.x += b.vx;
+            if (b.y < 0 || b.x < 0 || b.x > WIDTH) bullets.splice(i, 1);
+        }
+
+        for (let i = powerUps.length - 1; i >= 0; i--) {
+            let p = powerUps[i];
+            p.y += p.vy;
+            let dx = (ship.x + ship.w / 2) - p.x;
+            let dy = (ship.y + ship.h / 2) - p.y;
+            if (Math.hypot(dx, dy) < ship.w / 2 + p.size) {
+                activePowerUp = p.type;
+                powerUpTimer = 450;
+                if (p.type === "SHIELD") lives = Math.min(lives + 1, 5);
+                powerUps.splice(i, 1);
+            } else if (p.y > HEIGHT) {
+                powerUps.splice(i, 1);
+            }
         }
 
         for (let i = balls.length - 1; i >= 0; i--) {
@@ -300,16 +374,23 @@
             let dx = (ship.x + ship.w / 2) - ball.x;
             let dy = (ship.y + ship.h / 2) - ball.y;
             if (Math.hypot(dx, dy) < cfg.radius + ship.w / 3) {
-                lives--;
-                spawnExplosion(ship.x + ship.w/2, ship.y + ship.h/2, "#00ffff");
-                if (lives <= 0) {
-                    gameOver();
-                    return;
-                } else {
+                if (activePowerUp === "SHIELD") {
+                    activePowerUp = null;
+                    spawnExplosion(ship.x + ship.w/2, ship.y + ship.h/2, "#00ff66");
                     ball.y = 80;
                     ball.vy = 0;
-                    ship.x = WIDTH / 2 - ship.w / 2;
-                    break;
+                } else {
+                    lives--;
+                    spawnExplosion(ship.x + ship.w/2, ship.y + ship.h/2, "#00ffff");
+                    if (lives <= 0) {
+                        gameOver();
+                        return;
+                    } else {
+                        ball.y = 80;
+                        ball.vy = 0;
+                        ship.x = WIDTH / 2 - ship.w / 2;
+                        break;
+                    }
                 }
             }
 
@@ -319,11 +400,13 @@
                     bullets.splice(j, 1);
                     score += cfg.points;
                     spawnExplosion(ball.x, ball.y, cfg.color);
+                    spawnPowerUp(ball.x, ball.y);
 
                     if (cfg.splitSize > 0) {
                         let splitBounce = -Math.sqrt(2 * gravity * (cfg.targetHeight * 0.75));
-                        balls.push({ x: ball.x - 4, y: ball.y, vx: -2.2, vy: splitBounce, size: cfg.splitSize });
-                        balls.push({ x: ball.x + 4, y: ball.y, vx: 2.2, vy: splitBounce, size: cfg.splitSize });
+                        let speedMultiplier = 1.0 + (currentLevel * 0.05);
+                        balls.push({ x: ball.x - 4, y: ball.y, vx: -2.2 * speedMultiplier, vy: splitBounce, size: cfg.splitSize });
+                        balls.push({ x: ball.x + 4, y: ball.y, vx: 2.2 * speedMultiplier, vy: splitBounce, size: cfg.splitSize });
                     }
                     balls.splice(i, 1);
                     break;
@@ -347,6 +430,7 @@
 
         document.getElementById("score").innerText = `SCORE: ${score}`;
         document.getElementById("level-display").innerText = `LVL: ${currentLevel}`;
+        document.getElementById("upgrade-status").innerText = `PWR: ${activePowerUp || 'NONE'}`;
         document.getElementById("lives").innerText = `LIVES: ${"❤️".repeat(lives)}`;
     }
 
@@ -354,38 +438,76 @@
         ctx.fillStyle = "#0b0b12";
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+        ctx.strokeStyle = "rgba(0, 255, 255, 0.03)";
+        ctx.lineWidth = 1;
+        for (let x = 0; x < WIDTH; x += 20) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, HEIGHT); ctx.stroke();
+        }
+        for (let y = 0; y < HEIGHT; y += 20) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WIDTH, y); ctx.stroke();
+        }
+
         for (let p of particles) {
             ctx.save();
             ctx.globalAlpha = p.alpha;
             ctx.fillStyle = p.color;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = p.color;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
         }
 
-        ctx.fillStyle = "#00ffff";
+        for (let p of powerUps) {
+            ctx.save();
+            ctx.fillStyle = p.color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 8px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(p.type[0], p.x, p.y);
+            ctx.restore();
+        }
+
+        ctx.save();
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = activePowerUp === "SHIELD" ? "#00ff66" : "#00ffff";
+        ctx.fillStyle = activePowerUp === "SHIELD" ? "#00ff66" : "#00ffff";
         ctx.beginPath();
         ctx.moveTo(ship.x + ship.w / 2, ship.y);
         ctx.lineTo(ship.x, ship.y + ship.h);
         ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
         ctx.closePath();
         ctx.fill();
+        ctx.restore();
 
+        ctx.save();
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "#00ffcc";
         ctx.fillStyle = "#00ffcc";
         for (let b of bullets) {
             ctx.fillRect(b.x, b.y, b.w, b.h);
         }
+        ctx.restore();
 
         for (let ball of balls) {
             let cfg = ballConfigs[ball.size];
+            ctx.save();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = cfg.glow;
             ctx.fillStyle = cfg.color;
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, cfg.radius, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1.5;
             ctx.stroke();
 
             ctx.fillStyle = "#ffffff";
@@ -393,6 +515,7 @@
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(ball.size, ball.x, ball.y);
+            ctx.restore();
         }
     }
 
