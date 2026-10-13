@@ -51,6 +51,7 @@
             align-items: center;
             padding: 0 5px;
             flex-shrink: 0;
+            z-index: 20;
             box-shadow: 0 -5px 15px rgba(0, 255, 255, 0.15);
         }
         .ctrl-btn {
@@ -68,7 +69,6 @@
             text-align: center;
             touch-action: manipulation;
             box-shadow: 0 0 10px rgba(0, 255, 255, 0.4), inset 0 0 5px rgba(0, 255, 255, 0.2);
-            transition: all 0.1s ease;
         }
         .ctrl-btn:active {
             background: #00ffff;
@@ -86,10 +86,9 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 10;
+            z-index: 30;
             padding: 10px;
             text-align: center;
-            cursor: pointer;
         }
         h1 {
             color: #00ffff;
@@ -103,22 +102,21 @@
             font-size: 10px;
             margin-bottom: 14px;
             line-height: 1.4;
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
         }
         .btn {
             background: linear-gradient(135deg, #00ffff, #0088ff);
             color: #000;
             border: none;
-            padding: 9px 22px;
-            font-size: 12px;
+            padding: 10px 24px;
+            font-size: 13px;
             font-weight: bold;
             cursor: pointer;
             border-radius: 4px;
+            z-index: 35;
             box-shadow: 0 0 15px rgba(0, 255, 255, 0.8), 0 0 30px rgba(0, 136, 255, 0.5);
-            transition: transform 0.1s ease;
         }
-        .btn:hover {
-            transform: scale(1.05);
+        .btn:active {
+            transform: scale(0.95);
         }
         #hud {
             position: absolute;
@@ -136,7 +134,7 @@
         }
     </style>
 </head>
-<body onclick="ensureFocus()">
+<body>
 <div id="game-container">
     <div id="hud">
         <div id="score">SCORE: 0</div>
@@ -145,9 +143,9 @@
         <div id="lives">LIVES: ❤️❤️❤️</div>
     </div>
     
-    <div id="ui" onclick="startGame()">
+    <div id="ui">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use buttons or <b>A/D / Arrows</b>.<br>Press <b>Spacebar</b> to fire.<br>Destroying balls releases 8 bullets!<br>Click to start!</p>
+        <p>Use buttons or <b>A/D / Arrows</b>.<br>Press <b>Spacebar</b> to fire.<br>Destroying balls releases 8 bullets!<br>Click below to play!</p>
         <button class="btn" id="start-btn">PLAY GAME</button>
     </div>
     
@@ -182,16 +180,28 @@
     let powerUpTimer = 0;
 
     function ensureFocus() {
-        if (canvas) {
-            canvas.focus();
-        }
+        if (canvas) canvas.focus();
     }
 
     function initApp() {
         canvas = document.getElementById("canvas");
         if (!canvas) return;
         ctx = canvas.getContext("2d");
-        ensureFocus();
+
+        // Explicit handlers for play button to bypass Office web view click drops
+        const startBtn = document.getElementById("start-btn");
+        if (startBtn) {
+            startBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startGame();
+            });
+            startBtn.addEventListener("pointerdown", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startGame();
+            });
+        }
 
         const setupBtn = (id, actionDown, actionUp) => {
             let el = document.getElementById(id);
@@ -208,15 +218,12 @@
         setupBtn("btn-left", () => { keys["ArrowLeft"] = true; }, () => { keys["ArrowLeft"] = false; });
         setupBtn("btn-right", () => { keys["ArrowRight"] = true; }, () => { keys["ArrowRight"] = false; });
         setupBtn("btn-shoot", () => { if (gameState === "PLAYING") shoot(); }, () => {});
-        
-        canvas.addEventListener("click", () => ensureFocus());
     }
 
     if (typeof Office !== 'undefined' && Office.onReady) {
         Office.onReady(() => { initApp(); });
     }
     window.addEventListener("DOMContentLoaded", () => { initApp(); });
-    window.addEventListener("focus", () => { ensureFocus(); });
 
     window.addEventListener("keydown", e => {
         if (["ArrowLeft", "ArrowRight", "Space", "KeyA", "KeyD"].includes(e.code)) {
@@ -318,7 +325,7 @@
                 h: 8,
                 spd: Math.cos(angle) * speed,
                 vx: Math.sin(angle) * speed,
-                isPlayer: false // radial bullet
+                isPlayer: false
             });
         }
     }
@@ -411,3 +418,39 @@
                     ball.vy = 0;
                 } else {
                     lives--;
+                    spawnExplosion(ship.x + ship.w/2, ship.y + ship.h/2, "#00ffff");
+                    if (lives <= 0) {
+                        gameOver();
+                        return;
+                    } else {
+                        ball.y = 80;
+                        ball.vy = 0;
+                        ship.x = WIDTH / 2 - ship.w / 2;
+                        break;
+                    }
+                }
+            }
+
+            for (let j = bullets.length - 1; j >= 0; j--) {
+                let b = bullets[j];
+                if (b.isPlayer && Math.hypot(b.x - ball.x, b.y - ball.y) < cfg.radius) {
+                    bullets.splice(j, 1);
+                    score += cfg.points;
+                    spawnExplosion(ball.x, ball.y, cfg.color);
+                    releaseBallBullets(ball.x, ball.y);
+                    spawnPowerUp(ball.x, ball.y);
+
+                    if (cfg.splitSize > 0) {
+                        let splitBounce = -Math.sqrt(2 * gravity * (cfg.targetHeight * 0.75));
+                        let speedMultiplier = 1.0 + (currentLevel * 0.05);
+                        balls.push({ x: ball.x - 4, y: ball.y, vx: -2.2 * speedMultiplier, vy: splitBounce, size: cfg.splitSize });
+                        balls.push({ x: ball.x + 4, y: ball.y, vx: 2.2 * speedMultiplier, vy: splitBounce, size: cfg.splitSize });
+                    }
+                    balls.splice(i, 1);
+                    break;
+                }
+            }
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles
