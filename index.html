@@ -86,9 +86,10 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 30;
+            z-index: 9999;
             padding: 10px;
             text-align: center;
+            pointer-events: auto;
         }
         h1 {
             color: #00ffff;
@@ -96,27 +97,31 @@
             font-size: 20px;
             letter-spacing: 3px;
             text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #0088ff;
+            pointer-events: none;
         }
         p {
             color: #b8b8cc;
             font-size: 10px;
             margin-bottom: 14px;
             line-height: 1.4;
+            pointer-events: none;
         }
         .btn {
             background: linear-gradient(135deg, #00ffff, #0088ff);
             color: #000;
             border: none;
-            padding: 10px 24px;
-            font-size: 13px;
+            padding: 12px 28px;
+            font-size: 14px;
             font-weight: bold;
             cursor: pointer;
             border-radius: 4px;
-            z-index: 35;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.8), 0 0 30px rgba(0, 136, 255, 0.5);
+            z-index: 10000;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.9), 0 0 40px rgba(0, 136, 255, 0.7);
+            pointer-events: auto;
         }
         .btn:active {
             transform: scale(0.95);
+            background: #fff;
         }
         #hud {
             position: absolute;
@@ -134,7 +139,7 @@
         }
     </style>
 </head>
-<body>
+<body onclick="ensureFocus()">
 <div id="game-container">
     <div id="hud">
         <div id="score">SCORE: 0</div>
@@ -143,10 +148,11 @@
         <div id="lives">LIVES: ❤️❤️❤️</div>
     </div>
     
-    <div id="ui">
+    <!-- Entire overlay is now clickable to ensure play starts -->
+    <div id="ui" onclick="startGame()">
         <h1 id="title">NEON SPLITTER</h1>
-        <p>Use buttons or <b>A/D / Arrows</b>.<br>Press <b>Spacebar</b> to fire.<br>Destroying balls releases 8 bullets!<br>Click below to play!</p>
-        <button class="btn" id="start-btn">PLAY GAME</button>
+        <p>Use buttons or <b>A/D / Arrows</b>.<br>Press <b>Spacebar</b> to fire.<br>Destroying balls releases 8 bullets!<br><b>Click anywhere to play!</b></p>
+        <button class="btn" id="start-btn" onclick="event.stopPropagation(); startGame();">PLAY GAME</button>
     </div>
     
     <canvas id="canvas" width="320" height="420" tabindex="1"></canvas>
@@ -187,21 +193,6 @@
         canvas = document.getElementById("canvas");
         if (!canvas) return;
         ctx = canvas.getContext("2d");
-
-        // Explicit handlers for play button to bypass Office web view click drops
-        const startBtn = document.getElementById("start-btn");
-        if (startBtn) {
-            startBtn.addEventListener("click", (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                startGame();
-            });
-            startBtn.addEventListener("pointerdown", (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                startGame();
-            });
-        }
 
         const setupBtn = (id, actionDown, actionUp) => {
             let el = document.getElementById(id);
@@ -261,9 +252,10 @@
 
         loadLevel(currentLevel);
 
-        document.getElementById("ui").style.display = "none";
+        let ui = document.getElementById("ui");
+        if (ui) ui.style.display = "none";
+        
         ensureFocus();
-
         loop();
     }
 
@@ -285,7 +277,8 @@
         gameState = "GAMEOVER";
         if (animId) cancelAnimationFrame(animId);
         document.getElementById("title").innerText = "GAME OVER";
-        document.getElementById("start-btn").innerText = "PLAY AGAIN";
+        let startBtn = document.getElementById("start-btn");
+        if (startBtn) startBtn.innerText = "PLAY AGAIN";
         document.getElementById("ui").style.display = "flex";
     }
 
@@ -453,4 +446,137 @@
         }
 
         for (let i = particles.length - 1; i >= 0; i--) {
-            let p = particles
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= 0.035;
+            if (p.alpha <= 0) particles.splice(i, 1);
+        }
+
+        if (balls.length === 0) {
+            currentLevel++;
+            score += 300 * currentLevel;
+            loadLevel(currentLevel);
+        }
+
+        document.getElementById("score").innerText = `SCORE: ${score}`;
+        document.getElementById("level-display").innerText = `LVL: ${currentLevel}`;
+        document.getElementById("upgrade-status").innerText = `PWR: ${activePowerUp || 'NONE'}`;
+        document.getElementById("lives").innerText = `LIVES: ${"❤️".repeat(lives)}`;
+    }
+
+    function draw() {
+        ctx.fillStyle = "#07070c";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        ctx.strokeStyle = "rgba(0, 255, 255, 0.04)";
+        ctx.lineWidth = 1;
+        for (let x = 0; x < WIDTH; x += 20) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, HEIGHT); ctx.stroke();
+        }
+        for (let y = 0; y < HEIGHT; y += 20) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WIDTH, y); ctx.stroke();
+        }
+
+        for (let p of particles) {
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.color;
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        for (let p of powerUps) {
+            ctx.save();
+            ctx.shadowBlur = 16;
+            ctx.shadowColor = p.color;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 9px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(p.type[0], p.x, p.y);
+            ctx.restore();
+        }
+
+        ctx.save();
+        let shipColor = activePowerUp === "SHIELD" ? "#00ff66" : "#00ffff";
+        ctx.shadowBlur = 22;
+        ctx.shadowColor = shipColor;
+        ctx.fillStyle = shipColor;
+        ctx.beginPath();
+        ctx.moveTo(ship.x + ship.w / 2, ship.y);
+        ctx.lineTo(ship.x, ship.y + ship.h);
+        ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(ship.x + ship.w / 2, ship.y + 3);
+        ctx.lineTo(ship.x + ship.w / 2 - 3, ship.y + ship.h - 3);
+        ctx.lineTo(ship.x + ship.w / 2 + 3, ship.y + ship.h - 3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = "#00ffcc";
+        ctx.fillStyle = "#00ffcc";
+        for (let b of bullets) {
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+        }
+        ctx.restore();
+
+        for (let ball of balls) {
+            let cfg = ballConfigs[ball.size];
+            ctx.save();
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = cfg.glow;
+            
+            ctx.fillStyle = cfg.color;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, cfg.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 2, ball.x, ball.y, cfg.radius);
+            gradient.addColorStop(0, "#ffffff");
+            gradient.addColorStop(0.3, cfg.glow);
+            gradient.addColorStop(1, cfg.color);
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, cfg.radius - 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = "#07070c";
+            ctx.font = `900 ${Math.floor(cfg.radius * 0.75)}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(ball.size, ball.x, ball.y);
+            ctx.restore();
+        }
+    }
+
+    function loop() {
+        if (gameState !== "PLAYING") return;
+        update();
+        draw();
+        animId = requestAnimationFrame(loop);
+    }
+</script>
+</body>
+</html>
