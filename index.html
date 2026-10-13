@@ -357,7 +357,7 @@
 
     function buyUpgrade(type) {
         let up = upgrades[type];
-        if (coins >= up.cost && up.level < 3) {
+        if (coins >= up.cost && up.level < 100) {
             coins -= up.cost;
             up.level++;
             up.cost += 25;
