@@ -206,14 +206,17 @@
 
     function loadLevel(lvl) {
         balls = [];
-        let count = Math.min(1 + Math.floor(lvl / 2), 3);
+        // Scales up to tier 7 boss balls on higher levels
+        let startingSize = Math.min(7, 1 + Math.floor((lvl - 1) / 2));
+        let count = lvl > 5 ? 2 : 1;
+
         for (let i = 0; i < count; i++) {
             balls.push({ 
-                x: WIDTH / 2 + (i - 0.5) * 60, 
+                x: WIDTH / 2 + (i === 0 ? 0 : (i % 2 === 0 ? 50 : -50)), 
                 y: 60 + i * 20, 
-                vx: (i % 2 === 0 ? 1 : -1) * (2.0 + lvl * 0.1), 
+                vx: (i % 2 === 0 ? 1 : -1) * (1.8 + lvl * 0.07), 
                 vy: 0, 
-                size: Math.min(3, 1 + Math.floor(lvl / 3)) 
+                size: startingSize 
             });
         }
     }
@@ -221,10 +224,9 @@
     function gameOver() {
         gameState = "GAMEOVER";
         if (animId) cancelAnimationFrame(animId);
-        // Auto restart after a brief moment or hit space/click to restart
         setTimeout(() => {
             startGame();
-        }, 1500);
+        }, 2000);
     }
 
     function shoot() {
@@ -238,16 +240,16 @@
     }
 
     function spawnExplosion(x, y, color) {
-        for (let i = 0; i < 14; i++) {
+        for (let i = 0; i < 18; i++) {
             let angle = Math.random() * Math.PI * 2;
-            let speed = Math.random() * 5 + 1;
+            let speed = Math.random() * 6 + 1;
             particles.push({
                 x: x, y: y,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
                 alpha: 1,
                 color: color,
-                size: Math.random() * 3 + 1
+                size: Math.random() * 4 + 1
             });
         }
     }
@@ -255,7 +257,7 @@
     function releaseBallBullets(x, y) {
         for (let i = 0; i < 8; i++) {
             let angle = (i * Math.PI * 2) / 8;
-            let speed = 4.5;
+            let speed = 5.0;
             bullets.push({
                 x: x,
                 y: y,
@@ -269,7 +271,7 @@
     }
 
     function spawnPowerUp(x, y) {
-        if (Math.random() < 0.35) {
+        if (Math.random() < 0.45) {
             let types = ["TRIPLE", "SHIELD", "SPEED"];
             let type = types[Math.floor(Math.random() * types.length)];
             let color = type === "TRIPLE" ? "#ff00ff" : (type === "SHIELD" ? "#00ff66" : "#00ccff");
@@ -279,6 +281,10 @@
 
     const gravity = 0.4;
     const ballConfigs = {
+        7: { radius: 46, targetHeight: 390, color: "#ff00aa", glow: "#ff66cc", splitSize: 6, points: 2000 },
+        6: { radius: 41, targetHeight: 360, color: "#7000ff", glow: "#aa66ff", splitSize: 5, points: 1000 },
+        5: { radius: 36, targetHeight: 340, color: "#9900ff", glow: "#cc44ff", splitSize: 4, points: 500 },
+        4: { radius: 31, targetHeight: 310, color: "#00eeff", glow: "#77ffff", splitSize: 3, points: 250 },
         3: { radius: 26, targetHeight: 280, color: "#ff1144", glow: "#ff3366", splitSize: 2, points: 100 },
         2: { radius: 18, targetHeight: 200, color: "#ff8800", glow: "#ffaa33", splitSize: 1, points: 50 },
         1: { radius: 11, targetHeight: 130, color: "#ffee00", glow: "#ffff55", splitSize: 0, points: 25 }
@@ -400,7 +406,7 @@
 
         if (balls.length === 0) {
             currentLevel++;
-            score += 300 * currentLevel;
+            score += 1000 * currentLevel;
             loadLevel(currentLevel);
         }
 
@@ -486,7 +492,7 @@
         for (let ball of balls) {
             let cfg = ballConfigs[ball.size];
             ctx.save();
-            ctx.shadowBlur = 25;
+            ctx.shadowBlur = 32;
             ctx.shadowColor = cfg.glow;
             
             ctx.fillStyle = cfg.color;
@@ -494,9 +500,9 @@
             ctx.arc(ball.x, ball.y, cfg.radius, 0, Math.PI * 2);
             ctx.fill();
 
-            let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 2, ball.x, ball.y, cfg.radius);
+            let gradient = ctx.createRadialGradient(ball.x - 4, ball.y - 4, 3, ball.x, ball.y, cfg.radius);
             gradient.addColorStop(0, "#ffffff");
-            gradient.addColorStop(0.3, cfg.glow);
+            gradient.addColorStop(0.35, cfg.glow);
             gradient.addColorStop(1, cfg.color);
             ctx.fillStyle = gradient;
             ctx.beginPath();
@@ -504,11 +510,11 @@
             ctx.fill();
 
             ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.stroke();
 
             ctx.fillStyle = "#07070c";
-            ctx.font = `900 ${Math.floor(cfg.radius * 0.75)}px sans-serif`;
+            ctx.font = `900 ${Math.floor(cfg.radius * 0.7)}px sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(ball.size, ball.x, ball.y);
