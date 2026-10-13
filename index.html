@@ -90,10 +90,123 @@
             color: #00ffff;
             text-shadow: 0 0 8px rgba(0, 255, 255, 0.8);
         }
+        /* Starter Menu Overlay */
+        #upgrade-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(7, 7, 12, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+            padding: 20px;
+            text-align: center;
+        }
+        #upgrade-menu h2 {
+            color: #00ffff;
+            font-size: 18px;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+        }
+        #upgrade-menu p {
+            font-size: 11px;
+            color: #aaa;
+            margin-bottom: 15px;
+        }
+        .upgrade-item {
+            width: 100%;
+            background: #12121f;
+            border: 1px solid #00ffff;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .upgrade-info {
+            text-align: left;
+        }
+        .upgrade-info h4 {
+            font-size: 11px;
+            color: #fff;
+        }
+        .upgrade-info span {
+            font-size: 9px;
+            color: #00ffcc;
+        }
+        .buy-btn {
+            background: #00ffff;
+            color: #000;
+            border: none;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .buy-btn:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        #start-game-btn {
+            margin-top: 10px;
+            background: #ff00aa;
+            color: #fff;
+            border: none;
+            width: 100%;
+            padding: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(255, 0, 170, 0.5);
+        }
+        #start-game-btn:hover {
+            background: #ff33bb;
+        }
     </style>
 </head>
-<body onload="startGame()">
+<body>
 <div id="game-container">
+    <!-- Starter Upgrade Menu Overlay -->
+    <div id="upgrade-menu">
+        <h2>CYBER UPGRADES</h2>
+        <p>Spend coins to upgrade your ship before launch!</p>
+        <div style="font-size: 12px; color: #ff00ff; margin-bottom: 10px;" id="menu-coins">COINS: 100</div>
+        
+        <div class="upgrade-item">
+            <div class="upgrade-info">
+                <h4>Extra Life</h4>
+                <span>Lv. <span id="lvl-life">0</span>/3</span>
+            </div>
+            <button class="buy-btn" onclick="buyUpgrade('life')">50 🪙</button>
+        </div>
+
+        <div class="upgrade-item">
+            <div class="upgrade-info">
+                <h4>Speed Boost</h4>
+                <span>Lv. <span id="lvl-speed">0</span>/3</span>
+            </div>
+            <button class="buy-btn" onclick="buyUpgrade('speed')">40 🪙</button>
+        </div>
+
+        <div class="upgrade-item">
+            <div class="upgrade-info">
+                <h4>Extended Power-up</h4>
+                <span>Lv. <span id="lvl-powerup">0</span>/3</span>
+            </div>
+            <button class="buy-btn" onclick="buyUpgrade('powerup')">40 🪙</button>
+        </div>
+
+        <button id="start-game-btn" onclick="launchGame()">LAUNCH GAME 🚀</button>
+    </div>
+
     <div id="hud">
         <div id="score">SCORE: 0</div>
         <div id="level-display">LVL: 1</div>
@@ -115,8 +228,9 @@
     const WIDTH = 320;
     const HEIGHT = 420;
 
-    let gameState = "PLAYING";
+    let gameState = "MENU";
     let score = 0;
+    let coins = 100;
     let lives = 3;
     let currentLevel = 1;
     let animId = null;
@@ -131,6 +245,13 @@
     let activePowerUp = null;
     let powerUpTimer = 0;
 
+    // Upgrades state
+    let upgrades = {
+        life: { level: 0, cost: 50 },
+        speed: { level: 0, cost: 40 },
+        powerup: { level: 0, cost: 40 }
+    };
+
     function ensureFocus() {
         if (canvas) canvas.focus();
     }
@@ -139,7 +260,6 @@
         canvas = document.getElementById("canvas");
         if (!canvas) return;
         ctx = canvas.getContext("2d");
-        ensureFocus();
 
         const setupBtn = (id, actionDown, actionUp) => {
             let el = document.getElementById(id);
@@ -161,9 +281,9 @@
     }
 
     if (typeof Office !== 'undefined' && Office.onReady) {
-        Office.onReady(() => { initApp(); startGame(); });
+        Office.onReady(() => { initApp(); });
     }
-    window.addEventListener("DOMContentLoaded", () => { initApp(); startGame(); });
+    window.addEventListener("DOMContentLoaded", () => { initApp(); });
 
     window.addEventListener("keydown", e => {
         if (["ArrowLeft", "ArrowRight", "Space", "KeyA", "KeyD"].includes(e.code)) {
@@ -171,10 +291,6 @@
         }
         keys[e.code] = true;
 
-        if (e.code === "Enter" && gameState !== "PLAYING") {
-            e.preventDefault();
-            startGame();
-        }
         if (e.code === "Space" && gameState === "PLAYING") {
             shoot();
         }
@@ -184,13 +300,35 @@
         keys[e.code] = false;
     });
 
+    function buyUpgrade(type) {
+        let up = upgrades[type];
+        if (coins >= up.cost && up.level < 3) {
+            coins -= up.cost;
+            up.level++;
+            up.cost += 25;
+            
+            // Update UI
+            document.getElementById("menu-coins").innerText = `COINS: ${coins}`;
+            document.getElementById(`lvl-${type}`).innerText = up.level;
+        }
+    }
+
+    function launchGame() {
+        document.getElementById("upgrade-menu").style.display = "none";
+        startGame();
+    }
+
     function startGame() {
         if (!canvas) initApp();
         if (animId) cancelAnimationFrame(animId);
 
         gameState = "PLAYING";
         score = 0;
-        lives = 3;
+        
+        // Apply upgrades
+        lives = 3 + upgrades.life.level;
+        ship.speed = 5.5 + (upgrades.speed.level * 0.8);
+
         currentLevel = 1;
         bullets = [];
         particles = [];
@@ -206,7 +344,6 @@
 
     function loadLevel(lvl) {
         balls = [];
-        // Scales up to tier 7 boss balls on higher levels
         let startingSize = Math.min(7, 1 + Math.floor((lvl - 1) / 2));
         let count = lvl > 5 ? 2 : 1;
 
@@ -225,7 +362,10 @@
         gameState = "GAMEOVER";
         if (animId) cancelAnimationFrame(animId);
         setTimeout(() => {
-            startGame();
+            // Return to upgrade menu on game over
+            coins += Math.floor(score / 10);
+            document.getElementById("menu-coins").innerText = `COINS: ${coins}`;
+            document.getElementById("upgrade-menu").style.display = "flex";
         }, 2000);
     }
 
@@ -259,10 +399,7 @@
             let angle = (i * Math.PI * 2) / 8;
             let speed = 5.0;
             bullets.push({
-                x: x,
-                y: y,
-                w: 4,
-                h: 8,
+                x: x, y: y, w: 4, h: 8,
                 spd: Math.cos(angle) * speed,
                 vx: Math.sin(angle) * speed,
                 isPlayer: false
@@ -323,8 +460,10 @@
             let dy = (ship.y + ship.h / 2) - p.y;
             if (Math.hypot(dx, dy) < ship.w / 2 + p.size) {
                 activePowerUp = p.type;
-                powerUpTimer = 450;
-                if (p.type === "SHIELD") lives = Math.min(lives + 1, 5);
+                // Apply extended powerup upgrade bonus duration
+                let durationBonus = upgrades.powerup.level * 150;
+                powerUpTimer = 450 + durationBonus;
+                if (p.type === "SHIELD") lives = Math.min(lives + 1, 5 + upgrades.life.level);
                 powerUps.splice(i, 1);
             } else if (p.y > HEIGHT) {
                 powerUps.splice(i, 1);
