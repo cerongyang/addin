@@ -97,32 +97,33 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(7, 7, 12, 0.95);
+            background: rgba(7, 7, 12, 0.96);
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             z-index: 30;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
+            overflow-y: auto;
         }
         #upgrade-menu h2 {
             color: #00ffff;
-            font-size: 18px;
-            margin-bottom: 5px;
+            font-size: 16px;
+            margin-bottom: 2px;
             text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
         }
         #upgrade-menu p {
-            font-size: 11px;
+            font-size: 10px;
             color: #aaa;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         .upgrade-item {
             width: 100%;
             background: #12121f;
             border: 1px solid #00ffff;
-            padding: 8px 12px;
-            margin-bottom: 8px;
+            padding: 6px 10px;
+            margin-bottom: 6px;
             border-radius: 4px;
             display: flex;
             justify-content: space-between;
@@ -132,19 +133,19 @@
             text-align: left;
         }
         .upgrade-info h4 {
-            font-size: 11px;
+            font-size: 10px;
             color: #fff;
         }
         .upgrade-info span {
-            font-size: 9px;
+            font-size: 8px;
             color: #00ffcc;
         }
         .buy-btn {
             background: #00ffff;
             color: #000;
             border: none;
-            padding: 4px 8px;
-            font-size: 10px;
+            padding: 3px 6px;
+            font-size: 9px;
             font-weight: bold;
             cursor: pointer;
             border-radius: 3px;
@@ -154,14 +155,61 @@
             color: #888;
             cursor: not-allowed;
         }
+        .section-title {
+            font-size: 10px;
+            color: #ff00ff;
+            margin: 8px 0 4px 0;
+            text-align: left;
+            width: 100%;
+            font-weight: bold;
+            border-bottom: 1px dashed rgba(255, 0, 255, 0.3);
+            padding-bottom: 2px;
+        }
+        .noclip-box {
+            width: 100%;
+            background: rgba(255, 0, 255, 0.05);
+            border: 1px solid #ff00ff;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .noclip-box input {
+            background: #020205;
+            border: 1px solid #ff00ff;
+            color: #ff00ff;
+            font-weight: bold;
+            padding: 5px;
+            width: 50px;
+            text-align: center;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .warp-btn {
+            background: #ff00ff;
+            color: #000;
+            border: none;
+            padding: 6px 10px;
+            font-size: 10px;
+            font-weight: bold;
+            border-radius: 3px;
+            cursor: pointer;
+            flex-grow: 1;
+        }
+        .warp-btn:hover {
+            background: #ff33ff;
+        }
         #start-game-btn {
-            margin-top: 10px;
+            margin-top: 5px;
             background: #ff00aa;
             color: #fff;
             border: none;
             width: 100%;
-            padding: 10px;
-            font-size: 12px;
+            padding: 8px;
+            font-size: 11px;
             font-weight: bold;
             border-radius: 4px;
             cursor: pointer;
@@ -174,11 +222,11 @@
 </head>
 <body>
 <div id="game-container">
-    <!-- Starter Upgrade Menu Overlay -->
+    <!-- Starter Upgrade & Noclip Menu Overlay -->
     <div id="upgrade-menu">
         <h2>CYBER UPGRADES</h2>
-        <p>Spend coins to upgrade your ship before launch!</p>
-        <div style="font-size: 12px; color: #ff00ff; margin-bottom: 10px;" id="menu-coins">COINS: 100</div>
+        <p>Spend coins before launch or jump straight into testing!</p>
+        <div style="font-size: 11px; color: #ff00ff; margin-bottom: 6px;" id="menu-coins">COINS: 100</div>
         
         <div class="upgrade-item">
             <div class="upgrade-info">
@@ -204,7 +252,14 @@
             <button class="buy-btn" onclick="buyUpgrade('powerup')">40 🪙</button>
         </div>
 
-        <button id="start-game-btn" onclick="launchGame()">LAUNCH GAME 🚀</button>
+        <div class="section-title">🧪 TESTING MODE (NOCLIP)</div>
+        <div class="noclip-box">
+            <span style="font-size: 10px; color: #ff00ff;">Level Jump:</span>
+            <input type="number" id="noclip-level-input" value="1" min="1" max="50">
+            <button class="warp-btn" onclick="launchWithNoclip()">WARP TO LVL 🚀</button>
+        </div>
+
+        <button id="start-game-btn" onclick="launchGame()">LAUNCH STANDARD GAME 🚀</button>
     </div>
 
     <div id="hud">
@@ -307,7 +362,6 @@
             up.level++;
             up.cost += 25;
             
-            // Update UI
             document.getElementById("menu-coins").innerText = `COINS: ${coins}`;
             document.getElementById(`lvl-${type}`).innerText = up.level;
         }
@@ -315,21 +369,26 @@
 
     function launchGame() {
         document.getElementById("upgrade-menu").style.display = "none";
-        startGame();
+        startGame(1);
     }
 
-    function startGame() {
+    function launchWithNoclip() {
+        let targetLvl = parseInt(document.getElementById("noclip-level-input").value) || 1;
+        document.getElementById("upgrade-menu").style.display = "none";
+        startGame(targetLvl);
+    }
+
+    function startGame(startLvl = 1) {
         if (!canvas) initApp();
         if (animId) cancelAnimationFrame(animId);
 
         gameState = "PLAYING";
         score = 0;
         
-        // Apply upgrades
         lives = 3 + upgrades.life.level;
         ship.speed = 5.5 + (upgrades.speed.level * 0.8);
 
-        currentLevel = 1;
+        currentLevel = startLvl;
         bullets = [];
         particles = [];
         powerUps = [];
@@ -362,7 +421,6 @@
         gameState = "GAMEOVER";
         if (animId) cancelAnimationFrame(animId);
         setTimeout(() => {
-            // Return to upgrade menu on game over
             coins += Math.floor(score / 10);
             document.getElementById("menu-coins").innerText = `COINS: ${coins}`;
             document.getElementById("upgrade-menu").style.display = "flex";
@@ -460,7 +518,6 @@
             let dy = (ship.y + ship.h / 2) - p.y;
             if (Math.hypot(dx, dy) < ship.w / 2 + p.size) {
                 activePowerUp = p.type;
-                // Apply extended powerup upgrade bonus duration
                 let durationBonus = upgrades.powerup.level * 150;
                 powerUpTimer = 450 + durationBonus;
                 if (p.type === "SHIELD") lives = Math.min(lives + 1, 5 + upgrades.life.level);
