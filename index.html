@@ -129,7 +129,7 @@
         }
     </style>
 </head>
-<body onclick="ensureFocus()">
+<body>
 <div id="game-container">
     <div id="hud">
         <div id="score">SCORE: 0</div>
@@ -144,7 +144,7 @@
         <button class="btn" id="start-btn">PLAY GAME</button>
     </div>
     
-    <canvas id="canvas" width="320" height="420" tabindex="1"></canvas>
+    <canvas id="canvas" width="320" height="420" tabindex="0"></canvas>
 
     <div id="controls-bar">
         <div class="ctrl-btn" id="btn-left">◀ LEFT</div>
@@ -174,26 +174,15 @@
     let activePowerUp = null;
     let powerUpTimer = 0;
 
-    function ensureFocus() {
-        if (canvas) {
-            canvas.focus();
-        }
-    }
-
     function initApp() {
         canvas = document.getElementById("canvas");
         if (!canvas) return;
         ctx = canvas.getContext("2d");
-        ensureFocus();
 
         const setupBtn = (id, actionDown, actionUp) => {
             let el = document.getElementById(id);
             if (!el) return;
-            el.addEventListener("pointerdown", (e) => { 
-                e.preventDefault(); 
-                ensureFocus();
-                actionDown(); 
-            });
+            el.addEventListener("pointerdown", (e) => { e.preventDefault(); actionDown(); });
             el.addEventListener("pointerup", (e) => { e.preventDefault(); actionUp(); });
             el.addEventListener("pointerleave", (e) => { e.preventDefault(); actionUp(); });
         };
@@ -201,15 +190,12 @@
         setupBtn("btn-left", () => { keys["ArrowLeft"] = true; }, () => { keys["ArrowLeft"] = false; });
         setupBtn("btn-right", () => { keys["ArrowRight"] = true; }, () => { keys["ArrowRight"] = false; });
         setupBtn("btn-shoot", () => { if (gameState === "PLAYING") shoot(); }, () => {});
-        
-        canvas.addEventListener("click", () => ensureFocus());
     }
 
     if (typeof Office !== 'undefined' && Office.onReady) {
         Office.onReady(() => { initApp(); });
     }
     window.addEventListener("DOMContentLoaded", () => { initApp(); });
-    window.addEventListener("focus", () => { ensureFocus(); });
 
     window.addEventListener("keydown", e => {
         if (["ArrowLeft", "ArrowRight", "Space", "KeyA", "KeyD"].includes(e.code)) {
@@ -248,7 +234,8 @@
         loadLevel(currentLevel);
 
         document.getElementById("ui").style.display = "none";
-        ensureFocus();
+        window.focus();
+        if (canvas) canvas.focus();
 
         loop();
     }
@@ -342,7 +329,7 @@
             let dy = (ship.y + ship.h / 2) - p.y;
             if (Math.hypot(dx, dy) < ship.w / 2 + p.size) {
                 activePowerUp = p.type;
-                powerUpTimer = 450;
+                powerUpTimer = 450; // duration
                 if (p.type === "SHIELD") lives = Math.min(lives + 1, 5);
                 powerUps.splice(i, 1);
             } else if (p.y > HEIGHT) {
@@ -438,6 +425,7 @@
         ctx.fillStyle = "#0b0b12";
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+        // Grid lines background
         ctx.strokeStyle = "rgba(0, 255, 255, 0.03)";
         ctx.lineWidth = 1;
         for (let x = 0; x < WIDTH; x += 20) {
@@ -475,6 +463,7 @@
             ctx.restore();
         }
 
+        // Ship
         ctx.save();
         ctx.shadowBlur = 12;
         ctx.shadowColor = activePowerUp === "SHIELD" ? "#00ff66" : "#00ffff";
@@ -487,6 +476,7 @@
         ctx.fill();
         ctx.restore();
 
+        // Bullets
         ctx.save();
         ctx.shadowBlur = 8;
         ctx.shadowColor = "#00ffcc";
@@ -496,6 +486,7 @@
         }
         ctx.restore();
 
+        // Balls
         for (let ball of balls) {
             let cfg = ballConfigs[ball.size];
             ctx.save();
